@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>qmd</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.0/github-markdown.min.css">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --panel: #fafafa;
+    --border: #e4e4e7;
+    --text: #18181b;
+    --dim: #71717a;
+    --accent: #2f7df6;
+    --sel-bg: #f4f4f5;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d0d0f;
+      --panel: #121214;
+      --border: #26262b;
+      --text: #e4e4e7;
+      --dim: #76767f;
+      --accent: #5e9eff;
+      --sel-bg: #1b1b20;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 4px;
+    background: var(--panel);
+  }
+
+  /* ── header ─────────────────────────────── */
+  #header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  #searchBox {
+    flex: 1;
+    font-size: 16px;
+    font-family: inherit;
+    padding: 6px 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    outline: none;
+    caret-color: var(--accent);
+  }
+  #searchBox::placeholder { color: var(--dim); }
+  #hints {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: var(--dim);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  #spinner {
+    display: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  #menuBtn {
+    border: none;
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  #menuBtn:hover { color: var(--text); background: var(--sel-bg); }
+  #menuPopup {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px;
+    z-index: 100;
+    min-width: 150px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  #menuPopup button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  #menuPopup button:hover { background: var(--sel-bg); }
+
+  /* ── layout ─────────────────────────────── */
+  #main { flex: 1; display: flex; min-height: 0; }
+  #left {
+    width: 40%;
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+  }
+  #status {
+    padding: 6px 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+    border-bottom: 1px solid var(--border);
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+  }
+  #results { flex: 1; overflow-y: auto; }
+
+  /* ── results ────────────────────────────── */
+  .result {
+    padding: 9px 16px 9px 14px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid var(--border);
+  }
+  .result:hover { background: var(--sel-bg); }
+  .result.selected {
+    background: var(--sel-bg);
+    border-left-color: var(--accent);
+  }
+  .result-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-weight: 500;
+    font-size: 13px;
+  }
+  .result-title .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .result-score {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    flex-shrink: 0;
+  }
+  .result-path {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    margin: 3px 0 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+  }
+  .result-snippet {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--dim);
+    white-space: pre-wrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ── preview ────────────────────────────── */
+  #preview {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  #preview-header {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  #preview-path-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  #preview-path {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    word-break: break-all;
+    line-height: 1.5;
+    flex: 1;
+    user-select: all;
+  }
+  #copyBtn {
+    border: none;
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+  #copyBtn:hover { color: var(--text); background: var(--sel-bg); }
+  #copyBtn.copied { color: #34d399; }
+  #preview-buttons { display: flex; gap: 6px; }
+  #preview-buttons button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+  }
+  #preview-buttons button:hover { border-color: var(--dim); background: var(--sel-bg); }
+  #preview-scroll { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .placeholder { color: var(--dim); font-size: 12px; }
+  .error { color: #f87171; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+
+  /* ── markdown ───────────────────────────── */
+  .markdown-body {
+    background: transparent !important;
+    color: var(--text);
+    font-size: 13.5px;
+  }
+  .markdown-body pre { background: var(--panel) !important; border: 1px solid var(--border); border-radius: 6px; }
+  .markdown-body code { font-family: var(--mono); }
+  .markdown-body a { color: var(--accent); }
+  .markdown-body h1, .markdown-body h2 { border-bottom-color: var(--border) !important; }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+  <div id="header">
+    <input type="text" id="searchBox" placeholder="Search…" autocomplete="off" spellcheck="false">
+    <span id="spinner">deep search…</span>
+    <div id="hints">
+      <span><kbd>↩</kbd> deep</span>
+      <span><kbd>↑↓</kbd> nav</span>
+      <span><kbd>esc</kbd> clear</span>
+    </div>
+    <div style="position:relative">
+      <button id="menuBtn" title="Menu">⋯</button>
+      <div id="menuPopup">
+        <button onclick="runCommand('update')">Update index</button>
+        <button onclick="runCommand('status')">Status</button>
+      </div>
+    </div>
+  </div>
+  <div id="main">
+    <div id="left">
+      <div id="status"></div>
+      <div id="results"></div>
+    </div>
+    <div id="preview">
+      <div id="preview-header">
+        <div id="preview-path-row">
+          <span id="preview-path"></span>
+          <button id="copyBtn" onclick="copyPath()" title="Copy path">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+        <div id="preview-buttons">
+          <button onclick="openFile(false)">Open <kbd>⌘O</kbd></button>
+          <button onclick="openFile(true)">Reveal <kbd>⌘⇧F</kbd></button>
+        </div>
+      </div>
+      <div id="preview-scroll">
+        <div id="preview-content" class="markdown-body placeholder">Select a document to preview</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+let debounceTimer;
+let previewTimer;
+let copyTimer;
+let currentResults = [];
+let selectedIndex = -1;
+let currentQueryFetch = null;
+
+const box = document.getElementById('searchBox');
+const resultsEl = document.getElementById('results');
+const statusEl = document.getElementById('status');
+const spinnerEl = document.getElementById('spinner');
+const previewContent = document.getElementById('preview-content');
+const previewHeader = document.getElementById('preview-header');
+const previewPath = document.getElementById('preview-path');
+const previewScroll = document.getElementById('preview-scroll');
+const copyBtn = document.getElementById('copyBtn');
+
+const menuBtn = document.getElementById('menuBtn');
+const menuPopup = document.getElementById('menuPopup');
+
+const COPY_ICON = copyBtn.innerHTML;
+const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+menuBtn.addEventListener('click', () => {
+  menuPopup.style.display = menuPopup.style.display === 'block' ? 'none' : 'block';
+});
+
+document.addEventListener('click', (e) => {
+  if (!menuBtn.contains(e.target) && !menuPopup.contains(e.target)) {
+    menuPopup.style.display = 'none';
+  }
+});
+
+async function runCommand(cmd) {
+  menuPopup.style.display = 'none';
+  previewContent.className = 'markdown-body placeholder';
+  previewContent.textContent = 'Running ' + cmd + '…';
+  previewHeader.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/' + cmd, { method: cmd === 'update' ? 'POST' : 'GET' });
+    const text = await res.text();
+    previewContent.className = 'markdown-body';
+    previewContent.innerHTML = '<pre>' + escapeHtml(text) + '</pre>';
+  } catch(e) {
+    previewContent.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+box.focus();
+
+const urlParams = new URLSearchParams(window.location.search);
+const initialQ = urlParams.get('q');
+if (initialQ) {
+  box.value = initialQ;
+  doSearch(initialQ, 'instant');
+}
+
+function updateUrl(q) {
+  const url = new URL(window.location);
+  if (q.trim()) {
+    url.searchParams.set('q', q.trim());
+  } else {
+    url.searchParams.delete('q');
+  }
+  window.history.replaceState({}, '', url);
+}
+
+box.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    updateUrl(box.value);
+    doSearch(box.value, 'instant');
+  }, 150);
+});
+
+box.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    updateUrl(box.value);
+    doSearch(box.value, 'deep');
+  } else if (e.key === 'Escape') {
+    box.value = '';
+    updateUrl('');
+    resultsEl.innerHTML = '';
+    statusEl.textContent = '';
+    currentResults = [];
+    selectedIndex = -1;
+    previewContent.className = 'markdown-body placeholder';
+    previewContent.textContent = 'Select a document to preview';
+    previewHeader.style.display = 'none';
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    setSelection(selectedIndex + 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    setSelection(selectedIndex - 1);
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey && e.key === 'o') {
+    e.preventDefault();
+    openFile(false);
+  } else if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'f') {
+    e.preventDefault();
+    openFile(true);
+  }
+});
+
+async function doSearch(q, tier) {
+  if (!q.trim()) {
+    resultsEl.innerHTML = '';
+    statusEl.textContent = '';
+    currentResults = [];
+    return;
+  }
+
+  if (tier === 'deep') {
+    spinnerEl.style.display = 'block';
+    const timer = setTimeout(() => {
+      spinnerEl.textContent = 'warming models (~10s)…';
+    }, 2000);
+
+    if (currentQueryFetch) currentQueryFetch.abort();
+    currentQueryFetch = new AbortController();
+
+    try {
+      const res = await fetch('/api/query', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({q}),
+        signal: currentQueryFetch.signal
+      });
+      clearTimeout(timer);
+      spinnerEl.style.display = 'none';
+      spinnerEl.textContent = 'deep search…';
+      if (!res.ok) {
+        const text = await res.text();
+        showError(text);
+        return;
+      }
+      currentResults = await res.json();
+      renderResults('semantic');
+    } catch (e) {
+      clearTimeout(timer);
+      spinnerEl.style.display = 'none';
+      if (e.name !== 'AbortError') showError(e.message);
+    }
+  } else {
+    try {
+      const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+      if (!res.ok) {
+        showError(await res.text());
+        return;
+      }
+      currentResults = await res.json();
+      renderResults('keyword');
+    } catch(e) {
+      showError(e.message);
+    }
+  }
+}
+
+function showError(msg) {
+  statusEl.textContent = 'error';
+  resultsEl.innerHTML = '<div class="error" style="padding:16px">' + escapeHtml(msg) + '</div>';
+}
+
+function cleanSnippet(s) {
+  // strip qmd's "@@ -1,3 @@ (0 before, 202 after)" diff-header noise
+  return (s || '').replace(/^@@[^\n]*\n?/, '').trim();
+}
+
+function renderResults(badgeText) {
+  if (currentResults.length === 0) {
+    statusEl.textContent = '0 results · ' + badgeText;
+    resultsEl.innerHTML = '<div class="placeholder" style="padding:16px">No results</div>';
+    selectedIndex = -1;
+    return;
+  }
+
+  statusEl.textContent = currentResults.length + ' results · ' + badgeText;
+
+  resultsEl.innerHTML = currentResults.map((r, i) => {
+    const score = r.score ? Math.round(r.score * 100) + '%' : '';
+    return `
+      <div class="result" id="res-${i}" onclick="setSelection(${i})">
+        <div class="result-title">
+          <span class="name">${escapeHtml(r.title || r.file.split('/').pop())}</span>
+          <span class="result-score">${score}</span>
+        </div>
+        <div class="result-path">&lrm;${escapeHtml(r.file)}</div>
+        <div class="result-snippet">${escapeHtml(cleanSnippet(r.snippet))}</div>
+      </div>
+    `;
+  }).join('');
+
+  setSelection(0);
+}
+
+function setSelection(i) {
+  if (i < 0 || i >= currentResults.length) return;
+
+  const prev = document.getElementById('res-' + selectedIndex);
+  if (prev) prev.classList.remove('selected');
+
+  selectedIndex = i;
+  const next = document.getElementById('res-' + selectedIndex);
+  if (next) {
+    next.classList.add('selected');
+    next.scrollIntoView({block: 'nearest'});
+  }
+
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(loadPreview, 100);
+}
+
+async function loadPreview() {
+  const r = currentResults[selectedIndex];
+  if (!r) return;
+
+  previewContent.className = 'markdown-body placeholder';
+  previewContent.textContent = 'Loading…';
+
+  try {
+    const res = await fetch('/api/doc?file=' + encodeURIComponent(r.file));
+    if (!res.ok) throw new Error(await res.text());
+    const text = await res.text();
+
+    previewContent.className = 'markdown-body';
+    if (window.marked) {
+      previewContent.innerHTML = marked.parse(text);
+    } else {
+      previewContent.innerHTML = '<pre>' + escapeHtml(text) + '</pre>';
+    }
+    previewPath.textContent = r.file;
+    previewHeader.style.display = 'flex';
+    previewScroll.scrollTop = 0;
+  } catch(e) {
+    previewContent.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function copyPath() {
+  const r = currentResults[selectedIndex];
+  if (!r) return;
+  try {
+    await navigator.clipboard.writeText(r.file);
+    copyBtn.innerHTML = CHECK_ICON;
+    copyBtn.classList.add('copied');
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
+      copyBtn.innerHTML = COPY_ICON;
+      copyBtn.classList.remove('copied');
+    }, 1200);
+  } catch(e) {
+    // clipboard API can fail on non-secure contexts; select the text instead
+    const range = document.createRange();
+    range.selectNodeContents(previewPath);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+async function openFile(reveal) {
+  const r = currentResults[selectedIndex];
+  if (!r) return;
+
+  await fetch('/api/open', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({file: r.file, reveal})
+  });
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>'"]/g,
+    tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag])
+  );
+}
+</script>
+</body>
+</html>
