@@ -104,12 +104,49 @@
   #main { flex: 1; display: flex; min-height: 0; }
   #left {
     width: 40%;
-    min-width: 320px;
+    min-width: 200px;
+    max-width: 60%;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--border);
     background: var(--panel);
+    flex-shrink: 0;
+    transition: width 0.15s ease;
   }
+  #left.collapsed { width: 0 !important; min-width: 0; overflow: hidden; }
+
+  /* ── resizer ────────────────────────────── */
+  #resizer {
+    width: 5px;
+    flex-shrink: 0;
+    position: relative;
+    cursor: col-resize;
+    background: var(--border);
+    transition: background 0.15s;
+  }
+  #resizer:hover, #resizer.dragging { background: var(--accent); }
+  #toggle-sidebar {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 36px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dim);
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    z-index: 10;
+    user-select: none;
+  }
+  #resizer:hover #toggle-sidebar { opacity: 1; }
+  #toggle-sidebar:hover { color: var(--text); }
   #status {
     padding: 6px 16px;
     font-family: var(--mono);
@@ -274,6 +311,9 @@
     <div id="left">
       <div id="status"></div>
       <div id="results"></div>
+    </div>
+    <div id="resizer">
+      <div id="toggle-sidebar" title="Toggle sidebar">‹</div>
     </div>
     <div id="preview">
       <div id="preview-header">
@@ -557,6 +597,62 @@ async function openFile(reveal) {
     body: JSON.stringify({file: r.file, reveal})
   });
 }
+
+// ── sidebar resize & collapse ────────────────────────────────────────────────
+
+const leftEl = document.getElementById('left');
+const resizerEl = document.getElementById('resizer');
+const toggleBtn = document.getElementById('toggle-sidebar');
+
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = Math.round(window.innerWidth * 0.4);
+
+let sidebarCollapsed = false;
+let savedWidth = null;
+
+function setSidebarWidth(px) {
+  const clamped = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, px));
+  leftEl.style.width = clamped + 'px';
+}
+
+toggleBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (sidebarCollapsed) {
+    leftEl.classList.remove('collapsed');
+    if (savedWidth) leftEl.style.width = savedWidth;
+    toggleBtn.textContent = '‹';
+    sidebarCollapsed = false;
+  } else {
+    savedWidth = leftEl.style.width || leftEl.offsetWidth + 'px';
+    leftEl.classList.add('collapsed');
+    toggleBtn.textContent = '›';
+    sidebarCollapsed = true;
+  }
+});
+
+resizerEl.addEventListener('mousedown', (e) => {
+  if (e.target === toggleBtn) return;
+  if (sidebarCollapsed) return;
+  e.preventDefault();
+  resizerEl.classList.add('dragging');
+  const startX = e.clientX;
+  const startW = leftEl.offsetWidth;
+
+  function onMove(e) {
+    setSidebarWidth(startW + (e.clientX - startX));
+  }
+  function onUp() {
+    resizerEl.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+});
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>'"]/g,
