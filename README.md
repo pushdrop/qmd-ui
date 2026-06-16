@@ -32,7 +32,7 @@ qmd embed                   # generate vector embeddings (needed for deep search
 ## Install
 
 ```sh
-git clone https://github.com/makersmake/qmd-ui.git
+git clone https://github.com/pushdrop/qmd-ui.git
 cd qmd-ui
 ./install.sh
 ```
