@@ -13,115 +13,78 @@ See [SPEC.md](SPEC.md) for design decisions and measured latency numbers.
 
 ## Prerequisites
 
-1. **macOS** (uses `open` and LaunchAgents; tested on macOS 26)
-2. **Node.js ≥ 18** at `/opt/homebrew/bin/node`
-   ```sh
-   brew install node
-   ```
-3. **qmd ≥ 2.5** at `/opt/homebrew/bin/qmd`
-   ```sh
-   brew install tobi/tap/qmd   # or however qmd is distributed in your environment
-   ```
-4. **At least one qmd collection indexed.** Confirm with:
-   ```sh
-   qmd status
-   # should show "Documents: N files indexed"
-   ```
-   If not set up yet:
-   ```sh
-   qmd collection add home ~   # index your home directory for *.md files
-   qmd update                  # build the index
-   qmd embed                   # generate vector embeddings (needed for deep search)
-   ```
-
-> **Path assumptions.** `server.mjs` hardcodes `QMD = '/opt/homebrew/bin/qmd'`. If your `qmd` binary is elsewhere (e.g. `/usr/local/bin/qmd`), edit line 9 of `server.mjs` before running.
-
----
-
-## Quick start
-
-```sh
-git clone https://github.com/makersmake/qmd-ui.git ~/qmd-ui
-cd ~/qmd-ui
-node server.mjs
-# → open http://localhost:8765
-```
-
-The server:
-- Binds to `127.0.0.1:8765` only (not reachable from the network)
-- Auto-starts the qmd MCP HTTP daemon (`qmd mcp --http --daemon` on `:8181`) if it isn't already running
-- Resolves `qmd://` collection URIs to real filesystem paths on startup; if you add or rename a collection, restart the server
-
----
-
-## Install as a persistent background service (recommended)
-
-The plist in this repo runs the server automatically at login and restarts it if it crashes.
-
-**Step 1** — edit the plist to replace the hardcoded paths with your own:
-
-| Field in plist | Default | What to change |
+| Requirement | Check | Install |
 |---|---|---|
-| `ProgramArguments[1]` (node) | `/opt/homebrew/bin/node` | output of `which node` |
-| `ProgramArguments[2]` (server) | `/Users/navid/qmd-ui/server.mjs` | absolute path to where you cloned this repo |
-| `StandardErrorPath` | `/Users/navid/.cache/qmd/qmd-ui.err` | any writable log path |
-| `StandardOutPath` | `/Users/navid/.cache/qmd/qmd-ui.out` | any writable log path |
+| macOS | — | — |
+| Node.js ≥ 18 | `node --version` | `brew install node` |
+| qmd ≥ 2.5 | `qmd --version` | `brew install tobi/tap/qmd` |
+| qmd collection indexed | `qmd status` | see below |
 
-You can do this automatically with sed (replace `yourusername` and adjust the node path if needed):
-
+If qmd has no collection yet:
 ```sh
-sed \
-  -e "s|/Users/navid|$HOME|g" \
-  -e "s|/opt/homebrew/bin/node|$(which node)|g" \
-  com.navid.qmd-ui.plist > ~/Library/LaunchAgents/com.navid.qmd-ui.plist
+qmd collection add home ~   # index ~/  for *.md files
+qmd update                  # build the full-text index
+qmd embed                   # generate vector embeddings (needed for deep search)
 ```
 
-**Step 2** — load and start it:
+---
+
+## Install
 
 ```sh
-launchctl load ~/Library/LaunchAgents/com.navid.qmd-ui.plist
-launchctl start com.navid.qmd-ui
+git clone https://github.com/makersmake/qmd-ui.git
+cd qmd-ui
+./install.sh
 ```
 
-**Step 3** — verify it's running:
+`install.sh` detects `node` and `qmd` from your PATH, generates a LaunchAgent plist with the correct absolute paths for your machine, loads it, and confirms the server is up. The service starts automatically at login and restarts if it crashes.
+
+After install, open **http://localhost:8765** in any browser. For an app-like experience with a dock icon: open it in Safari → **File → Add to Dock**.
+
+---
+
+## Run without the background service
 
 ```sh
-curl http://127.0.0.1:8765/   # should return the HTML page
+node server.mjs
+# → http://localhost:8765
 ```
 
-**To stop / unload:**
+If `qmd` is not in your PATH, set `QMD_BIN`:
 ```sh
-launchctl unload ~/Library/LaunchAgents/com.navid.qmd-ui.plist
+QMD_BIN=/path/to/qmd node server.mjs
 ```
 
-**To restart after editing server.mjs or index.html:**
-```sh
-launchctl kickstart -k gui/$(id -u)/com.navid.qmd-ui
-```
-> Note: `index.html` is read from disk on every request, so UI-only changes take effect on the next browser refresh without a server restart.
+---
 
-**Logs:**
+## Manage the service
+
 ```sh
-tail -f ~/.cache/qmd/qmd-ui.err   # stderr (errors, startup messages)
-tail -f ~/.cache/qmd/qmd-ui.out   # stdout (request log)
+# view logs
+tail -f ~/.cache/qmd/qmd-ui.err
+
+# restart (e.g. after editing server.mjs)
+launchctl kickstart -k gui/$(id -u)/com.qmd-ui.server
+
+# stop
+launchctl unload ~/Library/LaunchAgents/com.qmd-ui.server.plist
+
+# start again
+launchctl load ~/Library/LaunchAgents/com.qmd-ui.server.plist
 ```
+
+> `index.html` is read from disk on every request — UI-only changes take effect on the next browser refresh, no restart needed.
 
 ---
 
 ## Ports
 
-| Port | Service | Notes |
-|---|---|---|
-| `8765` | qmd-ui web server | UI and JSON API |
-| `8181` | qmd MCP HTTP daemon | Managed by the server; started automatically |
+| Port | Service |
+|---|---|
+| `8765` | qmd-ui (web UI + JSON API) |
+| `8181` | qmd MCP HTTP daemon (managed automatically) |
 
-Both bind to `127.0.0.1` only.
-
----
-
-## Mac app experience (optional)
-
-Open `http://localhost:8765` in Safari → **File → Add to Dock**. This gives the UI its own dock icon and a chrome-free window, similar to a native app.
+Both bind to `127.0.0.1` only and are not reachable from the network.
 
 ---
 
@@ -140,14 +103,17 @@ Open `http://localhost:8765` in Safari → **File → Add to Dock**. This gives 
 
 ## Troubleshooting
 
-**Server won't start — `qmd` not found**
-Edit `QMD` on line 9 of `server.mjs` to the absolute path from `which qmd`.
+**`node` or `qmd` not found during install**
+Both must be in your PATH. Run `which node` and `which qmd` — if either returns nothing, install the missing tool and retry.
 
-**Deep search hangs for ~12 s on first query**
-Expected — the qmd daemon is loading embedding models into memory. Subsequent queries are ~4 s. If it never returns, check `~/.cache/qmd/mcp.log`.
+**Deep search hangs ~12 s on first query**
+Expected — the qmd daemon is loading embedding models into memory on first use. Subsequent queries are ~4 s. If it never returns, check `~/.cache/qmd/mcp.log`.
 
-**Preview shows an error fetching the doc**
-Run `qmd status` to confirm the file is indexed. If the collection root path changed, restart the server so it re-caches collection roots.
+**Server started but shows no results**
+Run `qmd status` to confirm files are indexed. If you recently added a collection, restart the server so it re-caches collection roots:
+```sh
+launchctl kickstart -k gui/$(id -u)/com.qmd-ui.server
+```
 
-**Port 8765 or 8181 already in use**
-Change `PORT` on line 10 of `server.mjs` (and update the LaunchAgent) for 8765. For 8181, `qmd mcp stop` kills the daemon and the server will respawn it.
+**Port conflict**
+Change `PORT` on line 10 of `server.mjs`, re-run `./install.sh` to regenerate the plist. For port 8181 (qmd daemon): `qmd mcp stop` and the server will respawn it.

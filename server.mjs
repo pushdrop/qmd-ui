@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const QMD = '/opt/homebrew/bin/qmd';
+const QMD = process.env.QMD_BIN || 'qmd';
 const PORT = 8765;
 const DAEMON_URL = 'http://localhost:8181';
 
