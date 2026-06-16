@@ -610,44 +610,64 @@ const SIDEBAR_MAX = Math.round(window.innerWidth * 0.4);
 let sidebarCollapsed = false;
 let savedWidth = null;
 
-function setSidebarWidth(px) {
-  const clamped = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, px));
-  leftEl.style.width = clamped + 'px';
+const COLLAPSE_THRESHOLD = 120; // px — drag below this to collapse
+
+function collapse() {
+  savedWidth = leftEl.style.width || leftEl.offsetWidth + 'px';
+  leftEl.classList.add('collapsed');
+  toggleBtn.textContent = '›';
+  sidebarCollapsed = true;
+}
+
+function expand(toWidth) {
+  leftEl.classList.remove('collapsed');
+  const w = toWidth || savedWidth || SIDEBAR_MIN + 'px';
+  leftEl.style.width = (typeof w === 'number') ? w + 'px' : w;
+  toggleBtn.textContent = '‹';
+  sidebarCollapsed = false;
 }
 
 toggleBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  if (sidebarCollapsed) {
-    leftEl.classList.remove('collapsed');
-    if (savedWidth) leftEl.style.width = savedWidth;
-    toggleBtn.textContent = '‹';
-    sidebarCollapsed = false;
-  } else {
-    savedWidth = leftEl.style.width || leftEl.offsetWidth + 'px';
-    leftEl.classList.add('collapsed');
-    toggleBtn.textContent = '›';
-    sidebarCollapsed = true;
-  }
+  sidebarCollapsed ? expand() : collapse();
 });
 
 resizerEl.addEventListener('mousedown', (e) => {
   if (e.target === toggleBtn) return;
-  if (sidebarCollapsed) return;
   e.preventDefault();
   resizerEl.classList.add('dragging');
+
+  // if collapsed, we start from 0 so any rightward drag expands
   const startX = e.clientX;
-  const startW = leftEl.offsetWidth;
+  const startW = sidebarCollapsed ? 0 : leftEl.offsetWidth;
 
   function onMove(e) {
-    setSidebarWidth(startW + (e.clientX - startX));
+    const desired = startW + (e.clientX - startX);
+    if (desired < COLLAPSE_THRESHOLD) {
+      // snap to collapsed while dragging so user sees feedback
+      if (!sidebarCollapsed) leftEl.classList.add('collapsed');
+    } else {
+      if (sidebarCollapsed) leftEl.classList.remove('collapsed');
+      const clamped = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, desired));
+      leftEl.style.width = clamped + 'px';
+    }
   }
-  function onUp() {
+
+  function onUp(e) {
     resizerEl.classList.remove('dragging');
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+
+    const finalW = startW + (e.clientX - startX);
+    if (finalW < COLLAPSE_THRESHOLD) {
+      collapse();
+    } else {
+      expand(Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, finalW)));
+    }
   }
+
   document.addEventListener('mousemove', onMove);
   document.addEventListener('mouseup', onUp);
   document.body.style.cursor = 'col-resize';
