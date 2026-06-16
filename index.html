@@ -87,45 +87,18 @@
     color: var(--accent);
     white-space: nowrap;
   }
-  #menuBtn {
+  .icon-btn {
     border: none;
     background: transparent;
     color: var(--dim);
     cursor: pointer;
     padding: 4px 6px;
     border-radius: 4px;
-    font-size: 14px;
+    display: flex;
+    align-items: center;
     line-height: 1;
   }
-  #menuBtn:hover { color: var(--text); background: var(--sel-bg); }
-  #menuPopup {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: 100%;
-    margin-top: 6px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px;
-    z-index: 100;
-    min-width: 150px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-  }
-  #menuPopup button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    border: none;
-    background: transparent;
-    color: var(--text);
-    padding: 7px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    font-family: inherit;
-  }
-  #menuPopup button:hover { background: var(--sel-bg); }
+  .icon-btn:hover { color: var(--text); background: var(--sel-bg); }
 
   /* ── layout ─────────────────────────────── */
   #main { flex: 1; display: flex; min-height: 0; }
@@ -290,13 +263,12 @@
       <span><kbd>↑↓</kbd> nav</span>
       <span><kbd>esc</kbd> clear</span>
     </div>
-    <div style="position:relative">
-      <button id="menuBtn" title="Menu">⋯</button>
-      <div id="menuPopup">
-        <button onclick="runCommand('update')">Update index</button>
-        <button onclick="runCommand('status')">Status</button>
-      </div>
-    </div>
+    <button class="icon-btn" onclick="runCommand('update')" title="Re-index collections">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+    </button>
+    <button class="icon-btn" onclick="runCommand('status')" title="Index status">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    </button>
   </div>
   <div id="main">
     <div id="left">
@@ -340,24 +312,10 @@ const previewPath = document.getElementById('preview-path');
 const previewScroll = document.getElementById('preview-scroll');
 const copyBtn = document.getElementById('copyBtn');
 
-const menuBtn = document.getElementById('menuBtn');
-const menuPopup = document.getElementById('menuPopup');
-
 const COPY_ICON = copyBtn.innerHTML;
 const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
-menuBtn.addEventListener('click', () => {
-  menuPopup.style.display = menuPopup.style.display === 'block' ? 'none' : 'block';
-});
-
-document.addEventListener('click', (e) => {
-  if (!menuBtn.contains(e.target) && !menuPopup.contains(e.target)) {
-    menuPopup.style.display = 'none';
-  }
-});
-
 async function runCommand(cmd) {
-  menuPopup.style.display = 'none';
   previewContent.className = 'markdown-body placeholder';
   previewContent.textContent = 'Running ' + cmd + '…';
   previewHeader.style.display = 'none';
