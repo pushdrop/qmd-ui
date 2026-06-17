@@ -266,9 +266,17 @@ const server = http.createServer(async (req, res) => {
         if (resolved.startsWith(root + '/')) { isValid = true; break; }
       }
       if (!isValid) { res.writeHead(400); res.end('Invalid or unauthorized path'); return; }
-      const content = await readFile(resolved, 'utf8');
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end(content);
+      try {
+        const content = await readFile(resolved, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(content);
+      } catch (e) {
+        if (e.code === 'ENOENT') {
+          res.writeHead(404); res.end(`File not found on disk: ${resolved}\n\nIt may have been moved or deleted. Run Reindex to update the search index.`);
+        } else {
+          throw e;
+        }
+      }
       return;
     }
 
