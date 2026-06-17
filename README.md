@@ -2,6 +2,8 @@
 
 Minimal local web UI for searching a [qmd](https://github.com/tobi/qmd) markdown index. Zero-dependency Node server + single HTML page.
 
+![demo](demo.gif)
+
 - **Instant tier** — BM25 keyword results as you type (~100 ms via `qmd search`)
 - **Deep tier** — press ↩ for hybrid semantic/reranked search through the warm `qmd mcp --http` daemon (~4 s warm, ~12 s first cold start)
 - Markdown preview pane, copy path, Open (⌘O) / Reveal in Finder (⌘⇧F)
