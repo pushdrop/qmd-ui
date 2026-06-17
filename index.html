@@ -282,21 +282,23 @@
   }
   #editor-mount .cm-editor {
     height: 100%;
-    background: var(--bg);
-    color: var(--text);
     font-family: var(--mono);
     font-size: 13.5px;
   }
   #editor-mount .cm-focused { outline: none !important; }
   #editor-mount .cm-scroller { overflow: auto; }
-  #editor-mount .cm-content { padding: 20px 24px; caret-color: var(--accent); line-height: 1.6; }
+  #editor-mount .cm-content { padding: 20px 24px; line-height: 1.65; }
   #editor-mount .cm-line { min-height: 1em; }
-  #editor-mount .cm-gutters { background: var(--panel); border-right: 1px solid var(--border); color: var(--dim); }
-  #editor-mount .cm-activeLineGutter, #editor-mount .cm-activeLine { background: var(--sel-bg); }
-  #editor-mount .cm-cursor { border-left-color: var(--accent) !important; }
-  #editor-mount .cm-selectionBackground { background: color-mix(in srgb, var(--accent) 25%, transparent) !important; }
-  #editor-mount .cm-panels { background: var(--panel); border-color: var(--border); color: var(--text); }
-  #editor-mount .ͼb { color: var(--accent); } /* headings */
+  #editor-mount .cm-panels { border-color: var(--border) !important; }
+  /* Light mode — dark mode colors are handled by the oneDark CM6 theme */
+  @media (prefers-color-scheme: light) {
+    #editor-mount .cm-editor { background: var(--bg); color: var(--text); }
+    #editor-mount .cm-gutters { background: var(--panel); border-right: 1px solid var(--border); color: var(--dim); }
+    #editor-mount .cm-activeLineGutter, #editor-mount .cm-activeLine { background: var(--sel-bg); }
+    #editor-mount .cm-cursor { border-left-color: var(--accent) !important; }
+    #editor-mount .cm-selectionBackground { background: color-mix(in srgb, var(--accent) 25%, transparent) !important; }
+    #editor-mount .cm-panels { background: var(--panel); color: var(--text); }
+  }
   #save-status {
     font-family: var(--mono);
     font-size: 11px;
@@ -660,15 +662,23 @@ let _cm = null;
 
 async function loadCM() {
   if (_cm) return _cm;
-  // Import from specific sub-packages — the codemirror meta-package doesn't
-  // export named bindings via esm.sh. All @codemirror/* packages share the
-  // same pinned sub-dep URLs on esm.sh so the browser deduplicates them.
-  const [{ EditorView, keymap }, { history, historyKeymap, defaultKeymap }, { markdown }] = await Promise.all([
+  const [
+    { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection },
+    { history, historyKeymap, defaultKeymap, indentWithTab },
+    { markdown },
+    { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput },
+    { oneDark },
+  ] = await Promise.all([
     import('https://esm.sh/@codemirror/view@6'),
     import('https://esm.sh/@codemirror/commands@6'),
     import('https://esm.sh/@codemirror/lang-markdown@6'),
+    import('https://esm.sh/@codemirror/language@6'),
+    import('https://esm.sh/@codemirror/theme-one-dark@6'),
   ]);
-  _cm = { EditorView, keymap, history, historyKeymap, defaultKeymap, markdown };
+  _cm = { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection,
+          history, historyKeymap, defaultKeymap, indentWithTab,
+          markdown, syntaxHighlighting, defaultHighlightStyle, bracketMatching,
+          indentOnInput, oneDark };
   return _cm;
 }
 
@@ -692,20 +702,32 @@ async function toggleEdit() {
   editBtn.disabled = true;
 
   try {
-    const [{ EditorView, keymap, history, historyKeymap, defaultKeymap, markdown }, res] = await Promise.all([
+    const [cm, res] = await Promise.all([
       loadCM(),
       fetch('/api/doc?file=' + encodeURIComponent(r.file)),
     ]);
     if (!res.ok) throw new Error(await res.text());
     const text = await res.text();
+    const { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection,
+            history, historyKeymap, defaultKeymap, indentWithTab,
+            markdown, syntaxHighlighting, defaultHighlightStyle, bracketMatching,
+            indentOnInput, oneDark } = cm;
 
     if (editorView) { editorView.destroy(); editorView = null; }
 
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     editorView = new EditorView({
       doc: text,
       extensions: [
+        lineNumbers(),
+        drawSelection(),
+        highlightActiveLine(),
+        bracketMatching(),
+        indentOnInput(),
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        syntaxHighlighting(defaultHighlightStyle),
+        isDark ? oneDark : [],
+        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         markdown(),
         EditorView.lineWrapping,
       ],
