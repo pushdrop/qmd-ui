@@ -623,7 +623,7 @@ async function loadPreview() {
   previewContent.textContent = 'Loading…';
 
   try {
-    const res = await fetch('/api/doc?file=' + encodeURIComponent(r.file));
+    const res = await fetch('/api/raw?file=' + encodeURIComponent(r.file));
     if (!res.ok) throw new Error(await res.text());
     const text = await res.text();
 
