@@ -660,14 +660,15 @@ let _cm = null;
 
 async function loadCM() {
   if (_cm) return _cm;
-  // Both basicSetup and EditorView must come from the same codemirror instance.
-  // lang-markdown uses ?external= so esm.sh shares the same sub-package URLs
-  // rather than bundling a second copy (mismatched facets → "reading extension" error).
-  const [{ basicSetup, EditorView }, { markdown }] = await Promise.all([
-    import('https://esm.sh/codemirror@6'),
+  // Import from specific sub-packages — the codemirror meta-package doesn't
+  // export named bindings via esm.sh. All @codemirror/* packages share the
+  // same pinned sub-dep URLs on esm.sh so the browser deduplicates them.
+  const [{ EditorView, keymap }, { history, historyKeymap, defaultKeymap }, { markdown }] = await Promise.all([
+    import('https://esm.sh/@codemirror/view@6'),
+    import('https://esm.sh/@codemirror/commands@6'),
     import('https://esm.sh/@codemirror/lang-markdown@6'),
   ]);
-  _cm = { basicSetup, EditorView, markdown };
+  _cm = { EditorView, keymap, history, historyKeymap, defaultKeymap, markdown };
   return _cm;
 }
 
@@ -691,7 +692,7 @@ async function toggleEdit() {
   editBtn.disabled = true;
 
   try {
-    const [{ EditorView, basicSetup, markdown }, res] = await Promise.all([
+    const [{ EditorView, keymap, history, historyKeymap, defaultKeymap, markdown }, res] = await Promise.all([
       loadCM(),
       fetch('/api/doc?file=' + encodeURIComponent(r.file)),
     ]);
@@ -702,7 +703,12 @@ async function toggleEdit() {
 
     editorView = new EditorView({
       doc: text,
-      extensions: [basicSetup, markdown(), EditorView.lineWrapping],
+      extensions: [
+        history(),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        markdown(),
+        EditorView.lineWrapping,
+      ],
       parent: editorMount,
     });
 
