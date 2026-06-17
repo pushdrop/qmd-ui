@@ -660,11 +660,12 @@ let _cm = null;
 
 async function loadCM() {
   if (_cm) return _cm;
-  const [cm, { markdown }] = await Promise.all([
+  const [{ basicSetup }, { EditorView }, { markdown }] = await Promise.all([
     import('https://esm.sh/codemirror@6'),
+    import('https://esm.sh/@codemirror/view@6'),
     import('https://esm.sh/@codemirror/lang-markdown@6'),
   ]);
-  _cm = { ...cm, markdown };
+  _cm = { basicSetup, EditorView, markdown };
   return _cm;
 }
 
@@ -688,12 +689,11 @@ async function toggleEdit() {
   editBtn.disabled = true;
 
   try {
-    const [{ EditorView, basicSetup }, res] = await Promise.all([
+    const [{ EditorView, basicSetup, markdown }, res] = await Promise.all([
       loadCM(),
       fetch('/api/doc?file=' + encodeURIComponent(r.file)),
     ]);
     if (!res.ok) throw new Error(await res.text());
-    const { markdown } = _cm;
     const text = await res.text();
 
     if (editorView) { editorView.destroy(); editorView = null; }
