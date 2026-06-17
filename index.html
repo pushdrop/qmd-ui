@@ -665,7 +665,7 @@ async function loadCM() {
   // rather than bundling a second copy (mismatched facets → "reading extension" error).
   const [{ basicSetup, EditorView }, { markdown }] = await Promise.all([
     import('https://esm.sh/codemirror@6'),
-    import('https://esm.sh/@codemirror/lang-markdown@6?external=@codemirror/state,@codemirror/view,@codemirror/language'),
+    import('https://esm.sh/@codemirror/lang-markdown@6'),
   ]);
   _cm = { basicSetup, EditorView, markdown };
   return _cm;
