@@ -66,13 +66,13 @@ QMD_BIN=/path/to/qmd node server.mjs
 tail -f ~/.cache/qmd/qmd-ui.err
 
 # restart (e.g. after editing server.mjs)
-launchctl kickstart -k gui/$(id -u)/com.navid.qmd-ui
+launchctl kickstart -k gui/$(id -u)/com.qmd-ui.server
 
 # stop
-launchctl unload ~/Library/LaunchAgents/com.navid.qmd-ui.plist
+launchctl unload ~/Library/LaunchAgents/com.qmd-ui.server.plist
 
 # start again
-launchctl load ~/Library/LaunchAgents/com.navid.qmd-ui.plist
+launchctl load ~/Library/LaunchAgents/com.qmd-ui.server.plist
 ```
 
 > `index.html` is read from disk on every request — UI-only changes take effect on the next browser refresh, no restart needed.
@@ -114,7 +114,7 @@ Expected — the qmd daemon is loading embedding models into memory on first use
 **Server started but shows no results**
 Run `qmd status` to confirm files are indexed. If you recently added a collection, restart the server so it re-caches collection roots:
 ```sh
-launchctl kickstart -k gui/$(id -u)/com.navid.qmd-ui
+launchctl kickstart -k gui/$(id -u)/com.qmd-ui.server
 ```
 
 **Port conflict**

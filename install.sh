@@ -5,7 +5,7 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE_BIN="$(which node 2>/dev/null || echo '')"
 QMD_BIN="$(which qmd 2>/dev/null || echo '')"
-PLIST_LABEL="com.navid.qmd-ui"
+PLIST_LABEL="com.qmd-ui.server"
 PLIST_DEST="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
 LOG_DIR="$HOME/.cache/qmd"
 
