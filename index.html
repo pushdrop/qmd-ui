@@ -213,14 +213,12 @@
   }
   .result-path {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 11px;
     color: var(--dim);
     margin: 3px 0 4px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    direction: rtl;
-    text-align: left;
   }
   .result-snippet {
     font-size: 11px;
@@ -256,8 +254,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    direction: rtl;
-    text-align: left;
     user-select: all;
     min-width: 0;
   }
@@ -591,7 +587,7 @@ function renderResults(badgeText) {
           <span class="name">${escapeHtml(r.title || r.file.split('/').pop())}</span>
           <span class="result-score">${score}</span>
         </div>
-        <div class="result-path">&lrm;${escapeHtml(r.file)}</div>
+        <div class="result-path">${escapeHtml(friendlyPath(r.file))}</div>
         <div class="result-snippet">${escapeHtml(cleanSnippet(r.snippet))}</div>
       </div>
     `;
@@ -637,7 +633,7 @@ async function loadPreview() {
     } else {
       previewContent.innerHTML = '<pre>' + escapeHtml(text) + '</pre>';
     }
-    previewPath.textContent = r.file;
+    previewPath.textContent = friendlyPath(r.file);
     previewHeader.style.display = 'flex';
     previewScroll.scrollTop = 0;
   } catch(e) {
@@ -886,6 +882,10 @@ resizerEl.addEventListener('mousedown', (e) => {
   document.body.style.cursor = 'col-resize';
   document.body.style.userSelect = 'none';
 });
+
+function friendlyPath(file) {
+  return file.replace(/^\/Users\/[^/]+/, '~');
+}
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>'"]/g,
