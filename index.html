@@ -735,7 +735,7 @@ async function toggleEdit() {
   try {
     const [cm, res] = await Promise.all([
       loadCM(),
-      fetch('/api/doc?file=' + encodeURIComponent(r.file)),
+      fetch('/api/raw?file=' + encodeURIComponent(r.file)),
     ]);
     if (!res.ok) throw new Error(await res.text());
     const text = await res.text();

@@ -217,10 +217,10 @@ const server = http.createServer(async (req, res) => {
       if (!file) {
         res.writeHead(400); res.end('Missing file param'); return;
       }
-      let out = await exec(QMD, ['get', file, '--no-line-numbers', '--full-path']);
-      // qmd get prepends a "qmd://... #docid" line and a "---" rule; strip them
+      let out = await exec(QMD, ['get', file, '--no-line-numbers']);
+      // qmd get prepends a header line (qmd:// or filesystem path) + a "---" rule; strip both
       const lines = out.split('\n');
-      if (lines[0]?.startsWith('qmd://')) {
+      if (lines[0]?.startsWith('qmd://') || lines[0]?.startsWith('/')) {
         lines.shift();
         if (lines[0]?.trim() === '---') lines.shift();
         out = lines.join('\n').replace(/^\n+/, '');
@@ -257,6 +257,21 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     
+    if (req.method === 'GET' && url.pathname === '/api/raw') {
+      const file = url.searchParams.get('file');
+      if (!file) { res.writeHead(400); res.end('Missing file param'); return; }
+      const resolved = resolve(file);
+      let isValid = false;
+      for (const root of collectionRoots.values()) {
+        if (resolved.startsWith(root + '/')) { isValid = true; break; }
+      }
+      if (!isValid) { res.writeHead(400); res.end('Invalid or unauthorized path'); return; }
+      const content = await readFile(resolved, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end(content);
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/save') {
       let body = '';
       for await (const chunk of req) body += chunk;
