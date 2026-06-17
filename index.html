@@ -723,10 +723,21 @@ async function toggleEdit() {
   if (isEditing) { cancelEdit(); return; }
 
   const r = currentResults[selectedIndex];
-  if (!r) return;
+  if (!r) {
+    previewContent.className = 'markdown-body error';
+    previewContent.textContent = 'No document selected.';
+    return;
+  }
 
   editBtn.textContent = 'Loading…';
   editBtn.disabled = true;
+
+  // Show loading state in preview area — CM modules take ~8s on first load
+  const wasShowingPreview = previewScroll.style.display !== 'none';
+  if (wasShowingPreview && !_cm) {
+    previewContent.className = 'markdown-body placeholder';
+    previewContent.textContent = 'Loading editor…';
+  }
 
   try {
     const [cm, res] = await Promise.all([
