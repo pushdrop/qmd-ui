@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { execFile, spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -257,6 +257,24 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     
+    if (req.method === 'POST' && url.pathname === '/api/save') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const { file, content } = JSON.parse(body);
+
+      const resolved = resolve(file);
+      let isValid = false;
+      for (const root of collectionRoots.values()) {
+        if (resolved.startsWith(root + '/')) { isValid = true; break; }
+      }
+      if (!isValid) { res.writeHead(400); res.end('Invalid or unauthorized path'); return; }
+
+      await writeFile(resolved, content, 'utf8');
+      await exec(QMD, ['update']);
+      res.writeHead(200); res.end('OK');
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/update') {
       const out = await exec(QMD, ['update']);
       res.writeHead(200, { 'Content-Type': 'text/plain' });

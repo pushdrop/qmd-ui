@@ -274,6 +274,39 @@
   .placeholder { color: var(--dim); font-size: 12px; }
   .error { color: #f87171; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
 
+  /* ── editor ─────────────────────────────── */
+  #editor-mount {
+    flex: 1;
+    overflow: hidden;
+    display: none;
+  }
+  #editor-mount .cm-editor {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  #editor-mount .cm-focused { outline: none !important; }
+  #editor-mount .cm-scroller { overflow: auto; }
+  #editor-mount .cm-content { padding: 20px 24px; caret-color: var(--accent); line-height: 1.6; }
+  #editor-mount .cm-line { min-height: 1em; }
+  #editor-mount .cm-gutters { background: var(--panel); border-right: 1px solid var(--border); color: var(--dim); }
+  #editor-mount .cm-activeLineGutter, #editor-mount .cm-activeLine { background: var(--sel-bg); }
+  #editor-mount .cm-cursor { border-left-color: var(--accent) !important; }
+  #editor-mount .cm-selectionBackground { background: color-mix(in srgb, var(--accent) 25%, transparent) !important; }
+  #editor-mount .cm-panels { background: var(--panel); border-color: var(--border); color: var(--text); }
+  #editor-mount .ͼb { color: var(--accent); } /* headings */
+  #save-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    align-self: center;
+    min-width: 80px;
+  }
+  #save-status.ok { color: #34d399; }
+  #save-status.err { color: #f87171; }
+
   /* ── markdown ───────────────────────────── */
   .markdown-body {
     background: transparent !important;
@@ -324,13 +357,18 @@
           </button>
         </div>
         <div id="preview-buttons">
-          <button onclick="openFile(false)">Open <kbd>⌘O</kbd></button>
-          <button onclick="openFile(true)">Reveal <kbd>⌘⇧F</kbd></button>
+          <button id="editBtn" onclick="toggleEdit()">Edit <kbd>⌘E</kbd></button>
+          <button id="saveBtn" onclick="saveFile()" style="display:none">Save <kbd>⌘S</kbd></button>
+          <button id="cancelEditBtn" onclick="cancelEdit()" style="display:none">Cancel <kbd>esc</kbd></button>
+          <span id="save-status"></span>
+          <button onclick="openFile(false)" id="openBtn">Open <kbd>⌘O</kbd></button>
+          <button onclick="openFile(true)" id="revealBtn">Reveal <kbd>⌘⇧F</kbd></button>
         </div>
       </div>
       <div id="preview-scroll">
         <div id="preview-content" class="markdown-body placeholder">Select a document to preview</div>
       </div>
+      <div id="editor-mount"></div>
     </div>
   </div>
 
@@ -428,6 +466,14 @@ document.addEventListener('keydown', (e) => {
   } else if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'f') {
     e.preventDefault();
     openFile(true);
+  } else if (e.metaKey && e.key === 'e') {
+    e.preventDefault();
+    if (currentResults[selectedIndex]) toggleEdit();
+  } else if (e.metaKey && e.key === 's') {
+    e.preventDefault();
+    if (isEditing) saveFile();
+  } else if (e.key === 'Escape' && isEditing) {
+    cancelEdit();
   }
 });
 
@@ -543,6 +589,8 @@ async function loadPreview() {
   const r = currentResults[selectedIndex];
   if (!r) return;
 
+  if (isEditing) cancelEdit();
+
   previewContent.className = 'markdown-body placeholder';
   previewContent.textContent = 'Loading…';
 
@@ -596,6 +644,111 @@ async function openFile(reveal) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({file: r.file, reveal})
   });
+}
+
+// ── editor ───────────────────────────────────────────────────────────────────
+
+const editorMount = document.getElementById('editor-mount');
+const editBtn = document.getElementById('editBtn');
+const saveBtn = document.getElementById('saveBtn');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+const saveStatus = document.getElementById('save-status');
+const previewScroll = document.getElementById('preview-scroll');
+
+let isEditing = false;
+let editorView = null;
+let _cm = null;
+
+async function loadCM() {
+  if (_cm) return _cm;
+  const [cm, { markdown }] = await Promise.all([
+    import('https://esm.sh/codemirror@6'),
+    import('https://esm.sh/@codemirror/lang-markdown@6'),
+  ]);
+  _cm = { ...cm, markdown };
+  return _cm;
+}
+
+function setEditMode(on) {
+  isEditing = on;
+  previewScroll.style.display = on ? 'none' : '';
+  editorMount.style.display = on ? 'flex' : 'none';
+  editBtn.style.display = on ? 'none' : '';
+  saveBtn.style.display = on ? '' : 'none';
+  cancelEditBtn.style.display = on ? '' : 'none';
+  if (!on) saveStatus.textContent = '';
+}
+
+async function toggleEdit() {
+  if (isEditing) { cancelEdit(); return; }
+
+  const r = currentResults[selectedIndex];
+  if (!r) return;
+
+  editBtn.textContent = 'Loading…';
+  editBtn.disabled = true;
+
+  try {
+    const [{ EditorView, basicSetup }, res] = await Promise.all([
+      loadCM(),
+      fetch('/api/doc?file=' + encodeURIComponent(r.file)),
+    ]);
+    if (!res.ok) throw new Error(await res.text());
+    const { markdown } = _cm;
+    const text = await res.text();
+
+    if (editorView) { editorView.destroy(); editorView = null; }
+
+    editorView = new EditorView({
+      doc: text,
+      extensions: [basicSetup, markdown(), EditorView.lineWrapping],
+      parent: editorMount,
+    });
+
+    setEditMode(true);
+    editorView.focus();
+  } catch(e) {
+    previewContent.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+  } finally {
+    editBtn.textContent = 'Edit';
+    editBtn.disabled = false;
+  }
+}
+
+function cancelEdit() {
+  if (editorView) { editorView.destroy(); editorView = null; }
+  setEditMode(false);
+}
+
+async function saveFile() {
+  const r = currentResults[selectedIndex];
+  if (!r || !editorView) return;
+
+  const content = editorView.state.doc.toString();
+  saveBtn.disabled = true;
+  saveStatus.className = '';
+  saveStatus.textContent = 'saving…';
+
+  try {
+    const res = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: r.file, content }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+
+    saveStatus.className = 'ok';
+    saveStatus.textContent = 'saved ✓';
+    setTimeout(() => {
+      cancelEdit();
+      loadPreview();
+    }, 800);
+  } catch(e) {
+    saveStatus.className = 'err';
+    saveStatus.textContent = e.message;
+  } finally {
+    saveBtn.disabled = false;
+  }
 }
 
 // ── sidebar resize & collapse ────────────────────────────────────────────────
