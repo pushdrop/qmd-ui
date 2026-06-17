@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { execFile, spawn } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
-import { join, resolve, dirname } from 'node:path';
+import { readFile, writeFile, access } from 'node:fs/promises';
+import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -123,6 +123,20 @@ function toAbsolutePath(file) {
     return collectionRoots.get(parts[0]) + '/' + parts.slice(1).join('/');
   }
   return file;
+}
+
+// qmd normalizes underscores to dashes in its index paths. When the resolved
+// path doesn't exist, try swapping dashes↔underscores in just the filename.
+async function resolveRealPath(p) {
+  try { await access(p); return p; } catch {}
+  const dir = dirname(p);
+  const base = basename(p);
+  for (const alt of [base.replace(/-/g, '_'), base.replace(/_/g, '-')]) {
+    if (alt === base) continue;
+    const candidate = join(dir, alt);
+    try { await access(candidate); return candidate; } catch {}
+  }
+  return p; // not found — return original so callers get a clear ENOENT
 }
 
 let mcpCallId = 2;
@@ -267,7 +281,8 @@ const server = http.createServer(async (req, res) => {
       }
       if (!isValid) { res.writeHead(400); res.end('Invalid or unauthorized path'); return; }
       try {
-        const content = await readFile(resolved, 'utf8');
+        const real = await resolveRealPath(resolved);
+        const content = await readFile(real, 'utf8');
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end(content);
       } catch (e) {
@@ -292,7 +307,8 @@ const server = http.createServer(async (req, res) => {
       }
       if (!isValid) { res.writeHead(400); res.end('Invalid or unauthorized path'); return; }
 
-      await writeFile(resolved, content, 'utf8');
+      const real = await resolveRealPath(resolved);
+      await writeFile(real, content, 'utf8');
       await exec(QMD, ['update']);
       res.writeHead(200); res.end('OK');
       return;
