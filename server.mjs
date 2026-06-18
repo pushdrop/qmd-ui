@@ -204,7 +204,7 @@ const server = http.createServer(async (req, res) => {
       const resolved = await Promise.all(results.map(async r => {
         const abs = toAbsolutePath(r.file);
         const real = await resolveRealPath(abs);
-        try { await access(real); return { ...r, file: abs }; } catch { return null; }
+        try { await access(real); return { ...r, file: real }; } catch { return null; }
       }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(resolved.filter(Boolean)));
@@ -225,7 +225,7 @@ const server = http.createServer(async (req, res) => {
       const resolved = await Promise.all(results.map(async r => {
         const abs = toAbsolutePath(r.file);
         const real = await resolveRealPath(abs);
-        try { await access(real); return { ...r, file: abs }; } catch { return null; }
+        try { await access(real); return { ...r, file: real }; } catch { return null; }
       }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(resolved.filter(Boolean)));
