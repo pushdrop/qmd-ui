@@ -91,6 +91,26 @@
   }
   body.landing #hints { display: none; }
   body.landing #searchBox { font-size: 20px; }
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--fg);
+    color: var(--bg);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 12px;
+    max-width: min(560px, 90vw);
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 999;
+  }
+  #toast.visible { opacity: 1; pointer-events: auto; }
   #hints {
     display: flex;
     gap: 10px;
@@ -343,6 +363,7 @@
 </style>
 </head>
 <body>
+  <div id="toast"></div>
   <div id="header">
     <input type="text" id="searchBox" placeholder="Search…" autocomplete="off" spellcheck="false">
     <span id="spinner">deep search…</span>
@@ -411,18 +432,29 @@ const copyBtn = document.getElementById('copyBtn');
 const COPY_ICON = copyBtn.innerHTML;
 const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
-async function runCommand(cmd) {
-  previewContent.className = 'markdown-body placeholder';
-  previewContent.textContent = 'Running ' + cmd + '…';
-  previewHeader.style.display = 'none';
+let _toastTimer = null;
+function showToast(msg, persist) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  if (!persist) _toastTimer = setTimeout(() => t.classList.remove('visible'), 4000);
+}
+function hideToast() {
+  const t = document.getElementById('toast');
+  t.classList.remove('visible');
+  if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
+}
 
+async function runCommand(cmd) {
+  const label = cmd === 'update' ? 'Reindexing…' : 'Loading status…';
+  showToast(label, true);
   try {
     const res = await fetch('/api/' + cmd, { method: cmd === 'update' ? 'POST' : 'GET' });
     const text = await res.text();
-    previewContent.className = 'markdown-body';
-    previewContent.innerHTML = '<pre>' + escapeHtml(text) + '</pre>';
+    showToast(cmd === 'update' ? 'Reindex complete ✓' : text.trim());
   } catch(e) {
-    previewContent.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+    showToast('Error: ' + e.message);
   }
 }
 
