@@ -942,6 +942,7 @@ async function toggleEdit() {
 function cancelEdit() {
   if (editorView) { editorView.destroy(); editorView = null; }
   setEditMode(false);
+  loadPreview();
 }
 
 async function saveFile() {
@@ -963,10 +964,7 @@ async function saveFile() {
 
     saveStatus.className = 'ok';
     saveStatus.textContent = 'saved ✓';
-    setTimeout(() => {
-      cancelEdit();
-      loadPreview();
-    }, 800);
+    setTimeout(() => cancelEdit(), 800);
   } catch(e) {
     saveStatus.className = 'err';
     saveStatus.textContent = e.message;
