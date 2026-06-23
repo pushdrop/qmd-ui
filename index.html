@@ -625,12 +625,6 @@ box.addEventListener('keydown', (e) => {
     previewContent.textContent = 'Select a document to preview';
     previewHeader.style.display = 'none';
     document.body.classList.add('landing');
-  } else if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    setSelection(selectedIndex + 1);
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    setSelection(selectedIndex - 1);
   }
 });
 
@@ -649,6 +643,11 @@ document.addEventListener('keydown', (e) => {
     if (isEditing) saveFile();
   } else if (e.key === 'Escape' && isEditing) {
     cancelEdit();
+  } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !isEditing) {
+    const active = document.activeElement;
+    if (active && active !== box && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    e.preventDefault();
+    setSelection(e.key === 'ArrowDown' ? selectedIndex + 1 : selectedIndex - 1);
   }
 });
 
