@@ -97,9 +97,11 @@ Both bind to `127.0.0.1` only and are not reachable from the network.
 | Type | Instant BM25 search (150 ms debounce) |
 | ↩ | Deep semantic search (hybrid lex+vec+rerank) |
 | ↑ / ↓ | Navigate results |
+| ⌘E | Edit selected file |
+| ⌘S | Save (while editing) |
 | ⌘O | Open selected file in default editor |
 | ⌘⇧F | Reveal selected file in Finder |
-| Esc | Clear query |
+| Esc | Cancel edit / clear query / return to landing |
 
 ---
 
