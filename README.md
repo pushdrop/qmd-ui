@@ -52,9 +52,16 @@ node server.mjs
 # → http://localhost:8765
 ```
 
-If `qmd` is not in your PATH, set `QMD_BIN`:
+Environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `QMD_BIN` | `qmd` | Path to the qmd binary |
+| `PORT` | `8765` | Port to listen on |
+| `QMD_DAEMON_URL` | `http://localhost:8181` | qmd MCP daemon URL |
+
 ```sh
-QMD_BIN=/path/to/qmd node server.mjs
+QMD_BIN=/path/to/qmd PORT=9000 node server.mjs
 ```
 
 ---

@@ -3,12 +3,14 @@ import { execFile, spawn } from 'node:child_process';
 import { readFile, writeFile, access, stat } from 'node:fs/promises';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const QMD = process.env.QMD_BIN || 'qmd';
-const PORT = 8765;
-const DAEMON_URL = 'http://localhost:8181';
+const QMD        = process.env.QMD_BIN        || 'qmd';
+const PORT       = Number(process.env.PORT)    || 8765;
+const DAEMON_URL = process.env.QMD_DAEMON_URL  || 'http://localhost:8181';
+const HOME       = homedir();
 
 let mcpSessionId = null;
 let collectionRoots = new Map();
@@ -337,6 +339,12 @@ const server = http.createServer(async (req, res) => {
       await writeFile(real, content, 'utf8');
       await exec(QMD, ['update']);
       res.writeHead(200); res.end('OK');
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/config') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ home: HOME, port: PORT }));
       return;
     }
 

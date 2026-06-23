@@ -1173,8 +1173,12 @@ function formatMtime(d) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
 }
 
+let _home = '';
+fetch('/api/config').then(r => r.json()).then(c => { _home = c.home; }).catch(() => {});
+
 function friendlyPath(file) {
-  return file.replace(/^\/Users\/[^/]+/, '~');
+  if (_home && file.startsWith(_home)) return '~' + file.slice(_home.length);
+  return file.replace(/^\/Users\/[^/]+/, '~'); // fallback for macOS before config loads
 }
 
 function escapeHtml(str) {
