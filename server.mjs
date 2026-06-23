@@ -12,6 +12,7 @@ const DAEMON_URL = 'http://localhost:8181';
 
 let mcpSessionId = null;
 let collectionRoots = new Map();
+let folderCache = [];
 
 async function exec(cmd, args) {
   return new Promise((resolve, reject) => {
@@ -49,6 +50,25 @@ async function ensureDaemon() {
     }
     console.error('Daemon failed to start.');
   }
+}
+
+async function cacheFolders() {
+  const dirSet = new Set();
+  for (const root of collectionRoots.values()) {
+    dirSet.add(root);
+    const stdout = await new Promise(resolve => {
+      execFile('find', [
+        root, '-maxdepth', '8', '-name', '*.md',
+        '-not', '-path', '*/.*', '-not', '-path', '*/node_modules/*',
+      ], { maxBuffer: 20 * 1024 * 1024 }, (_err, out) => resolve(out || ''));
+    });
+    for (const f of stdout.split('\n').map(s => s.trim()).filter(Boolean)) {
+      let d = dirname(f);
+      while (d.startsWith(root) && d !== root) { dirSet.add(d); d = dirname(d); }
+    }
+  }
+  folderCache = [...dirSet].sort();
+  console.log(`Cached ${folderCache.length} folders`);
 }
 
 async function cacheRoots() {
@@ -320,8 +340,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/folders') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(folderCache));
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/update') {
       const out = await exec(QMD, ['update']);
+      cacheFolders(); // refresh folder cache after reindex (new dirs may have appeared)
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end(out);
       return;
@@ -345,6 +372,7 @@ const server = http.createServer(async (req, res) => {
 
 await ensureDaemon();
 await cacheRoots();
+await cacheFolders();
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Server listening on http://127.0.0.1:${PORT}`);

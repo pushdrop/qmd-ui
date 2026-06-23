@@ -138,6 +138,90 @@
     line-height: 1;
   }
   .icon-btn:hover { color: var(--text); background: var(--sel-bg); }
+  .icon-btn.active { color: var(--accent); }
+  body.landing #scope-wrap { display: none; }
+
+  /* ── scope picker ───────────────────────── */
+  #scope-wrap { position: relative; }
+  #scope-picker {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    width: 340px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18);
+    z-index: 200;
+    overflow: hidden;
+    flex-direction: column;
+  }
+  #scope-picker.open { display: flex; }
+  #scope-input {
+    border: none;
+    border-bottom: 1px solid var(--border);
+    padding: 9px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    width: 100%;
+  }
+  #scope-input::placeholder { color: var(--dim); }
+  #scope-list { max-height: 300px; overflow-y: auto; }
+  .scope-section {
+    padding: 6px 12px 2px;
+    font-size: 10px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .scope-option {
+    padding: 7px 12px;
+    font-size: 11px;
+    font-family: var(--mono);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .scope-option:hover { background: var(--sel-bg); }
+
+  /* ── scope chip (status bar) ────────────── */
+  #scope-chip {
+    display: none;
+    align-items: center;
+    gap: 3px;
+    background: var(--sel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1px 5px 1px 6px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    max-width: 180px;
+  }
+  #scope-chip.active { display: flex; }
+  #scope-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #scope-clear {
+    background: none;
+    border: none;
+    color: var(--dim);
+    cursor: pointer;
+    padding: 0 0 0 2px;
+    font-size: 13px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  #scope-clear:hover { color: var(--text); }
 
   /* ── layout ─────────────────────────────── */
   #main { flex: 1; display: flex; min-height: 0; }
@@ -378,6 +462,15 @@
       <span><kbd>↑↓</kbd> nav</span>
       <span><kbd>esc</kbd> clear</span>
     </div>
+    <div id="scope-wrap">
+      <button id="scopeBtn" class="icon-btn" title="Filter by folder" onclick="toggleScopePicker()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <div id="scope-picker">
+        <input id="scope-input" type="text" placeholder="Filter folders…" autocomplete="off" spellcheck="false">
+        <div id="scope-list"></div>
+      </div>
+    </div>
     <button class="icon-btn" onclick="runCommand('update')" title="Reindex">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
     </button>
@@ -387,7 +480,14 @@
   </div>
   <div id="main">
     <div id="left">
-      <div id="status"></div>
+      <div id="status">
+        <div id="scope-chip">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span id="scope-label"></span>
+          <button id="scope-clear" onclick="clearScope()" title="Clear scope">×</button>
+        </div>
+        <span id="status-count"></span>
+      </div>
       <div id="results"></div>
     </div>
     <div id="resizer">
@@ -423,12 +523,16 @@ let debounceTimer;
 let previewTimer;
 let copyTimer;
 let currentResults = [];
+let displayedResults = [];
 let selectedIndex = -1;
+let currentScope = null;
+let lastBadge = 'keyword';
+let _folders = null;
 let currentQueryFetch = null;
 
 const box = document.getElementById('searchBox');
 const resultsEl = document.getElementById('results');
-const statusEl = document.getElementById('status');
+const statusEl = document.getElementById('status-count');
 const spinnerEl = document.getElementById('spinner');
 const previewContent = document.getElementById('preview-content');
 const previewHeader = document.getElementById('preview-header');
@@ -535,7 +639,7 @@ document.addEventListener('keydown', (e) => {
     openFile(true);
   } else if (e.metaKey && e.key === 'e') {
     e.preventDefault();
-    if (currentResults[selectedIndex]) toggleEdit();
+    if (displayedResults[selectedIndex]) toggleEdit();
   } else if (e.metaKey && e.key === 's') {
     e.preventDefault();
     if (isEditing) saveFile();
@@ -609,16 +713,24 @@ function cleanSnippet(s) {
 }
 
 function renderResults(badgeText) {
-  if (currentResults.length === 0) {
-    statusEl.textContent = '0 results · ' + badgeText;
-    resultsEl.innerHTML = '<div class="placeholder" style="padding:16px">No results</div>';
+  lastBadge = badgeText;
+  displayedResults = currentScope
+    ? currentResults.filter(r => r.file.startsWith(currentScope + '/') || r.file === currentScope)
+    : currentResults;
+
+  if (displayedResults.length === 0) {
+    const total = currentResults.length;
+    statusEl.textContent = (total > 0 ? `0 of ${total}` : '0') + ' results · ' + badgeText;
+    resultsEl.innerHTML = '<div class="placeholder" style="padding:16px">No results' + (currentScope ? ' in this folder' : '') + '</div>';
     selectedIndex = -1;
     return;
   }
 
-  statusEl.textContent = currentResults.length + ' results · ' + badgeText;
+  const scopedNote = (currentScope && displayedResults.length < currentResults.length)
+    ? ` of ${currentResults.length}` : '';
+  statusEl.textContent = displayedResults.length + scopedNote + ' results · ' + badgeText;
 
-  resultsEl.innerHTML = currentResults.map((r, i) => {
+  resultsEl.innerHTML = displayedResults.map((r, i) => {
     const score = r.score ? Math.round(r.score * 100) + '%' : '';
     return `
       <div class="result" id="res-${i}" onclick="setSelection(${i})">
@@ -636,7 +748,7 @@ function renderResults(badgeText) {
 }
 
 function setSelection(i) {
-  if (i < 0 || i >= currentResults.length) return;
+  if (i < 0 || i >= displayedResults.length) return;
 
   const prev = document.getElementById('res-' + selectedIndex);
   if (prev) prev.classList.remove('selected');
@@ -653,7 +765,7 @@ function setSelection(i) {
 }
 
 async function loadPreview() {
-  const r = currentResults[selectedIndex];
+  const r = displayedResults[selectedIndex];
   if (!r) return;
 
   if (isEditing) cancelEdit();
@@ -683,7 +795,7 @@ async function loadPreview() {
 }
 
 async function copyPath() {
-  const r = currentResults[selectedIndex];
+  const r = displayedResults[selectedIndex];
   if (!r) return;
   try {
     await navigator.clipboard.writeText(r.file);
@@ -705,7 +817,7 @@ async function copyPath() {
 }
 
 async function openFile(reveal) {
-  const r = currentResults[selectedIndex];
+  const r = displayedResults[selectedIndex];
   if (!r) return;
 
   await fetch('/api/open', {
@@ -763,7 +875,7 @@ function setEditMode(on) {
 async function toggleEdit() {
   if (isEditing) { cancelEdit(); return; }
 
-  const r = currentResults[selectedIndex];
+  const r = displayedResults[selectedIndex];
   if (!r) {
     previewContent.className = 'markdown-body error';
     previewContent.textContent = 'No document selected.';
@@ -829,7 +941,7 @@ function cancelEdit() {
 }
 
 async function saveFile() {
-  const r = currentResults[selectedIndex];
+  const r = displayedResults[selectedIndex];
   if (!r || !editorView) return;
 
   const content = editorView.state.doc.toString();
@@ -934,6 +1046,105 @@ resizerEl.addEventListener('mousedown', (e) => {
   document.body.style.cursor = 'col-resize';
   document.body.style.userSelect = 'none';
 });
+
+// ── scope / folder filter ─────────────────────────────────────────────────────
+
+const RECENT_SCOPE_KEY = 'qmd-recent-scopes';
+function getRecentScopes() {
+  try { return JSON.parse(localStorage.getItem(RECENT_SCOPE_KEY)) || []; } catch { return []; }
+}
+function saveRecentScope(path) {
+  const r = [path, ...getRecentScopes().filter(p => p !== path)].slice(0, 5);
+  localStorage.setItem(RECENT_SCOPE_KEY, JSON.stringify(r));
+}
+
+async function loadFolders() {
+  if (_folders) return _folders;
+  try { const res = await fetch('/api/folders'); _folders = await res.json(); }
+  catch { _folders = []; }
+  return _folders;
+}
+
+function toggleScopePicker() {
+  const picker = document.getElementById('scope-picker');
+  picker.classList.contains('open') ? closeScopePicker() : openScopePicker();
+}
+
+async function openScopePicker() {
+  const picker = document.getElementById('scope-picker');
+  const input = document.getElementById('scope-input');
+  picker.classList.add('open');
+  input.value = '';
+  input.focus();
+  renderScopeList('');
+  await loadFolders();
+  renderScopeList(input.value);
+}
+
+function closeScopePicker() {
+  document.getElementById('scope-picker').classList.remove('open');
+}
+
+function matchFolderFilter(path, filter) {
+  const parts = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return parts.every(p => path.toLowerCase().includes(p));
+}
+
+function renderScopeList(filter) {
+  const list = document.getElementById('scope-list');
+  const folders = _folders || [];
+  const recent = getRecentScopes();
+  const opt = path =>
+    `<div class="scope-option" data-path="${escapeHtml(path)}" title="${escapeHtml(path)}">${escapeHtml(friendlyPath(path))}</div>`;
+
+  if (!filter.trim()) {
+    let html = '';
+    if (recent.length) {
+      html += '<div class="scope-section">Recent</div>' + recent.map(opt).join('');
+    }
+    const others = folders.filter(p => !recent.includes(p));
+    if (others.length) {
+      html += '<div class="scope-section">All folders</div>' + others.slice(0, 10).map(opt).join('');
+    }
+    list.innerHTML = html || '<div class="scope-option" style="color:var(--dim);cursor:default;font-family:inherit">Loading…</div>';
+  } else {
+    const matches = folders.filter(p => matchFolderFilter(p, filter));
+    list.innerHTML = matches.length
+      ? matches.slice(0, 60).map(opt).join('')
+      : '<div class="scope-option" style="color:var(--dim);cursor:default;font-family:inherit">No folders match</div>';
+  }
+}
+
+document.getElementById('scope-list').addEventListener('click', e => {
+  const opt = e.target.closest('.scope-option[data-path]');
+  if (opt) setScope(opt.dataset.path);
+});
+
+document.getElementById('scope-input').addEventListener('input', e => {
+  renderScopeList(e.target.value);
+});
+
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('scope-wrap');
+  if (wrap && !wrap.contains(e.target)) closeScopePicker();
+}, true);
+
+function setScope(path) {
+  currentScope = path;
+  saveRecentScope(path);
+  document.getElementById('scope-chip').classList.add('active');
+  document.getElementById('scope-label').textContent = friendlyPath(path);
+  document.getElementById('scopeBtn').classList.add('active');
+  closeScopePicker();
+  if (currentResults.length) renderResults(lastBadge);
+}
+
+function clearScope() {
+  currentScope = null;
+  document.getElementById('scope-chip').classList.remove('active');
+  document.getElementById('scopeBtn').classList.remove('active');
+  if (currentResults.length) renderResults(lastBadge);
+}
 
 function formatMtime(d) {
   const now = new Date();
