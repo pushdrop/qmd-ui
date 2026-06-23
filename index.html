@@ -277,6 +277,12 @@
     user-select: all;
     min-width: 0;
   }
+  #preview-mtime {
+    font-size: 10px;
+    color: var(--dim);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
   #copyBtn {
     border: none;
     background: transparent;
@@ -390,6 +396,7 @@
     <div id="preview">
       <div id="preview-header">
         <span id="preview-path"></span>
+        <span id="preview-mtime"></span>
         <button id="copyBtn" onclick="copyPath()" title="Copy path">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
@@ -658,6 +665,7 @@ async function loadPreview() {
     const res = await fetch('/api/raw?file=' + encodeURIComponent(r.file));
     if (!res.ok) throw new Error(await res.text());
     const text = await res.text();
+    const mtime = res.headers.get('X-File-Mtime');
 
     previewContent.className = 'markdown-body';
     if (window.marked) {
@@ -666,6 +674,7 @@ async function loadPreview() {
       previewContent.innerHTML = '<pre>' + escapeHtml(text) + '</pre>';
     }
     previewPath.textContent = friendlyPath(r.file);
+    document.getElementById('preview-mtime').textContent = mtime ? formatMtime(new Date(mtime)) : '';
     previewHeader.style.display = 'flex';
     previewScroll.scrollTop = 0;
   } catch(e) {
@@ -925,6 +934,19 @@ resizerEl.addEventListener('mousedown', (e) => {
   document.body.style.cursor = 'col-resize';
   document.body.style.userSelect = 'none';
 });
+
+function formatMtime(d) {
+  const now = new Date();
+  const diff = now - d;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+}
 
 function friendlyPath(file) {
   return file.replace(/^\/Users\/[^/]+/, '~');

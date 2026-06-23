@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { execFile, spawn } from 'node:child_process';
-import { readFile, writeFile, access } from 'node:fs/promises';
+import { readFile, writeFile, access, stat } from 'node:fs/promises';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -288,8 +288,8 @@ const server = http.createServer(async (req, res) => {
       if (!isValid) { res.writeHead(400); res.end('Invalid or unauthorized path'); return; }
       try {
         const real = await resolveRealPath(resolved);
-        const content = await readFile(real, 'utf8');
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        const [content, info] = await Promise.all([readFile(real, 'utf8'), stat(real)]);
+        res.writeHead(200, { 'Content-Type': 'text/plain', 'X-File-Mtime': info.mtime.toISOString() });
         res.end(content);
       } catch (e) {
         if (e.code === 'ENOENT') {
