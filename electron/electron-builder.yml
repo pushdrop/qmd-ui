@@ -21,20 +21,11 @@ files:
   - "!**/node_modules/better-sqlite3/binding.gyp"
 
 # ── Outside asar so the qmd child process (ELECTRON_RUN_AS_NODE) can open them
+# Unpack everything: qmd.js resolves all its imports (fast-glob, yaml, zod, etc.)
+# at runtime from real FS paths. Files excluded via `files` are not present at all,
+# so this only enlarges the unpacked set by whatever is actually included.
 asarUnpack:
-  # qmd JS source — child process can't read from inside .asar
-  - "node_modules/@tobilu/**"
-  # Native .node addon — must be on real FS
-  - "**/node_modules/better-sqlite3/build/**"
-  # sqlite-vec platform dylibs — loaded via db.loadExtension()
-  - "**/node_modules/sqlite-vec-darwin-arm64/**"
-  - "**/node_modules/sqlite-vec-darwin-x64/**"
-  # tree-sitter WASM grammars — read from disk at runtime
-  - "**/node_modules/web-tree-sitter/**"
-  - "**/node_modules/tree-sitter-typescript/**"
-  - "**/node_modules/tree-sitter-python/**"
-  - "**/node_modules/tree-sitter-go/**"
-  - "**/node_modules/tree-sitter-rust/**"
+  - "node_modules/**"
 
 # ── Files placed in Resources/ outside the asar ──────────────────────────────
 extraResources:
@@ -49,6 +40,9 @@ extraResources:
 # including tree-sitter-* which fail and which we use via WASM anyway).
 # The CI explicitly runs @electron/rebuild -o better-sqlite3 before each arch build.
 npmRebuild: false
+
+# ── Post-pack hook to fix native module arch if electron-builder replaced it ──
+afterPack: ./afterPack.js
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
