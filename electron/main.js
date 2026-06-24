@@ -11,12 +11,14 @@ const { execFile, spawn } = require('child_process');
 const SERVER_PATH  = path.resolve(__dirname, '..', 'server.mjs');
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
 const SETUP_PATH   = path.join(__dirname, 'setup.html');
+const PREFS_PATH   = path.join(__dirname, 'prefs.html');
 const PORT         = Number(process.env.PORT) || 8765;
 const SERVER_URL   = `http://127.0.0.1:${PORT}`;
 const CONFIG_PATH  = path.join(app.getPath('userData'), 'config.json');
 
 let mainWindow    = null;
 let wizardWindow  = null;
+let prefsWindow   = null;
 let serverProcess = null;
 let tray          = null;
 let statusTimer   = null;
@@ -278,6 +280,26 @@ function createWizardWindow() {
   });
 }
 
+function createPrefsWindow() {
+  if (prefsWindow && !prefsWindow.isDestroyed()) {
+    prefsWindow.focus();
+    return;
+  }
+  prefsWindow = new BrowserWindow({
+    width: 500, height: 380, resizable: false,
+    title: 'Preferences',
+    titleBarStyle: 'default',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      preload: PRELOAD_PATH,
+    },
+  });
+  prefsWindow.loadFile(PREFS_PATH);
+  prefsWindow.on('closed', () => { prefsWindow = null; });
+}
+
 // ── tray ─────────────────────────────────────────────────────────────────
 
 function trayIcon(status) {
@@ -311,7 +333,7 @@ function buildTrayMenu(status) {
       },
     },
     { type: 'separator' },
-    { label: 'Preferences…', enabled: false },   // Phase 4
+    { label: 'Preferences…', click: () => createPrefsWindow() },
     { type: 'separator' },
     { label: 'Quit qmd-ui', role: 'quit' },
   ]);
@@ -362,7 +384,7 @@ function buildMenu() {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        { label: 'Preferences…', accelerator: 'Cmd+,', enabled: false, click: () => {} },
+        { label: 'Preferences…', accelerator: 'Cmd+,', click: () => createPrefsWindow() },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -399,8 +421,9 @@ ipcMain.handle('add-collection', async (_, { name, dir }) => {
   return runQmd(['collection', 'add', name, dir]);
 });
 
-ipcMain.handle('open-folder-dialog', async () => {
-  const result = await dialog.showOpenDialog(wizardWindow, {
+ipcMain.handle('open-folder-dialog', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
     properties: ['openDirectory'],
     title: 'Choose a folder to index',
   });

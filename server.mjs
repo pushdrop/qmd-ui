@@ -60,8 +60,17 @@ async function cacheFolders() {
     dirSet.add(root);
     const stdout = await new Promise(resolve => {
       execFile('find', [
-        root, '-maxdepth', '8', '-name', '*.md',
-        '-not', '-path', '*/.*', '-not', '-path', '*/node_modules/*',
+        root, '-maxdepth', '8',
+        // Prune TCC-protected app-data dirs and heavy trees BEFORE descending,
+        // mirroring qmd's own collection ignore list. Without this, find walks
+        // ~/Library/Containers, Group Containers, Application Support, etc. and
+        // trips the macOS "app data access from node" privacy prompt.
+        '(', '-path', '*/Library', '-o', '-path', '*/Applications',
+             '-o', '-path', '*/.*', '-o', '-path', '*/node_modules',
+             '-o', '-path', '*/Google Drive', '-o', '-path', '*/Dropbox',
+             '-o', '-path', '*/Pictures', '-o', '-path', '*/Movies',
+             '-o', '-path', '*/Music', ')', '-prune',
+        '-o', '-name', '*.md', '-print',
       ], { maxBuffer: 20 * 1024 * 1024 }, (_err, out) => resolve(out || ''));
     });
     for (const f of stdout.split('\n').map(s => s.trim()).filter(Boolean)) {
@@ -338,6 +347,34 @@ const server = http.createServer(async (req, res) => {
       const real = await resolveRealPath(resolved);
       await writeFile(real, content, 'utf8');
       await exec(QMD, ['update']);
+      res.writeHead(200); res.end('OK');
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/collections') {
+      const list = [...collectionRoots.entries()].map(([name, p]) => ({ name, path: p }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(list));
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/collections') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const { name, dir } = JSON.parse(body);
+      await exec(QMD, ['collection', 'add', name, dir]);
+      await cacheRoots();
+      await cacheFolders();
+      exec(QMD, ['update']).then(() => exec(QMD, ['embed'])).catch(console.error);
+      res.writeHead(200); res.end('OK');
+      return;
+    }
+
+    if (req.method === 'DELETE' && url.pathname.startsWith('/api/collections/')) {
+      const name = decodeURIComponent(url.pathname.slice('/api/collections/'.length));
+      await exec(QMD, ['collection', 'remove', name]);
+      collectionRoots.delete(name);
+      await cacheFolders();
       res.writeHead(200); res.end('OK');
       return;
     }

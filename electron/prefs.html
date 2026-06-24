@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>qmd-ui Preferences</title>
+  <style>
+    :root {
+      --accent: #6366f1; --bg: #f5f5f7; --fg: #1d1d1f;
+      --border: #d1d1d6; --card: #fff; --muted: #86868b;
+      --danger: #ef4444; --ok: #22c55e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --accent: #7c8cf8; --bg: #1c1c1e; --fg: #f2f2f7;
+        --border: #3a3a3c; --card: #2c2c2e; --muted: #98989d;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font: 14px/1.5 system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--fg);
+      padding: 24px; user-select: none;
+      -webkit-app-region: no-drag;
+    }
+    h1 { font-size: 17px; font-weight: 600; margin-bottom: 3px; }
+    .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+
+    .section-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px;
+    }
+
+    .collection-list {
+      border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; background: var(--card); margin-bottom: 12px;
+    }
+    .collection-row {
+      display: flex; align-items: center;
+      padding: 11px 14px; border-bottom: 1px solid var(--border); gap: 12px;
+    }
+    .collection-row:last-child { border-bottom: none; }
+    .coll-info { flex: 1; min-width: 0; }
+    .coll-name { font-weight: 600; font-size: 13px; }
+    .coll-path {
+      font-size: 11px; color: var(--muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .btn-remove {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--danger); cursor: pointer; font-size: 12px; padding: 4px 10px;
+      flex-shrink: 0;
+    }
+    .btn-remove:hover { background: #ef444422; }
+    .btn-remove:disabled { opacity: 0.4; cursor: default; }
+
+    .empty {
+      padding: 24px; text-align: center; color: var(--muted); font-size: 13px;
+    }
+
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .btn-add {
+      background: var(--accent); border: none; border-radius: 8px;
+      color: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
+      padding: 8px 16px;
+    }
+    .btn-add:hover { opacity: 0.88; }
+    .btn-add:disabled { opacity: 0.5; cursor: default; }
+
+    #status {
+      flex: 1; font-size: 12px; color: var(--muted); min-height: 18px;
+    }
+    #status.ok  { color: var(--ok); }
+    #status.err { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <h1>Preferences</h1>
+  <p class="subtitle">qmd-ui — Markdown Search</p>
+
+  <p class="section-label">Indexed Folders</p>
+  <div id="list" class="collection-list">
+    <div class="empty">Loading…</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-add" id="btn-add" onclick="addFolder()">+ Add folder</button>
+    <span id="status"></span>
+  </div>
+
+  <script>
+    const API = 'http://127.0.0.1:8765';
+    let busy = false;
+
+    function slugify(s) {
+      return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'notes';
+    }
+
+    function setStatus(msg, cls = '') {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = cls;
+    }
+
+    function setBusy(val) {
+      busy = val;
+      document.getElementById('btn-add').disabled = val;
+      document.querySelectorAll('.btn-remove').forEach(b => b.disabled = val);
+    }
+
+    async function loadCollections() {
+      try {
+        const res = await fetch(`${API}/api/collections`);
+        const cols = await res.json();
+        const list = document.getElementById('list');
+        if (!cols.length) {
+          list.innerHTML = '<div class="empty">No folders indexed yet.</div>';
+          return;
+        }
+        list.innerHTML = cols.map(c => `
+          <div class="collection-row">
+            <div class="coll-info">
+              <div class="coll-name">${escHtml(c.name)}</div>
+              <div class="coll-path" title="${escHtml(c.path)}">${escHtml(shortenPath(c.path))}</div>
+            </div>
+            <button class="btn-remove" onclick="removeCollection('${escAttr(c.name)}')">Remove</button>
+          </div>
+        `).join('');
+      } catch (e) {
+        document.getElementById('list').innerHTML =
+          '<div class="empty">Could not connect to qmd server.</div>';
+      }
+    }
+
+    async function removeCollection(name) {
+      if (busy) return;
+      if (!confirm(`Remove "${name}" from qmd?\n\nThe folder itself will not be deleted.`)) return;
+      setBusy(true);
+      setStatus('Removing…');
+      try {
+        const res = await fetch(`${API}/api/collections/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(await res.text());
+        setStatus(`Removed "${name}"`, 'ok');
+        await loadCollections();
+      } catch (e) {
+        setStatus('Error: ' + e.message, 'err');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function addFolder() {
+      if (busy) return;
+      const picked = await window.qmdSetup.openFolderDialog();
+      if (!picked) return;
+      setBusy(true);
+      setStatus('Adding and indexing… this may take a moment');
+      try {
+        const res = await fetch(`${API}/api/collections`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: picked.name, dir: picked.dir }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        setStatus(`Added "${picked.name}" — indexing in background`, 'ok');
+        await loadCollections();
+      } catch (e) {
+        setStatus('Error: ' + e.message, 'err');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function shortenPath(p) {
+      const home = p.match(/^\/Users\/[^/]+/)?.[0];
+      return home ? '~' + p.slice(home.length) : p;
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function escAttr(s) {
+      return String(s).replace(/'/g, '\\\'');
+    }
+
+    loadCollections();
+  </script>
+</body>
+</html>
