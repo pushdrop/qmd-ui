@@ -65,6 +65,13 @@ jobs:
           rm "$CERT_PATH"
 
       # ── Build arm64, then x64 — both signed, notarized, uploaded ─────────
+      # Rebuild better-sqlite3 for Electron's exact Node ABI per arch.
+      # npmRebuild:false in electron-builder.yml disables the auto-rebuild which
+      # would try (and fail) to recompile tree-sitter-* native bindings we don't need.
+      - name: Rebuild better-sqlite3 for Electron (arm64)
+        run: npx @electron/rebuild -f -o better-sqlite3 --arch arm64
+        working-directory: electron
+
       - name: Build and publish (arm64)
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -72,6 +79,10 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist:mac:arm64
+        working-directory: electron
+
+      - name: Rebuild better-sqlite3 for Electron (x64)
+        run: npx @electron/rebuild -f -o better-sqlite3 --arch x64
         working-directory: electron
 
       - name: Build and publish (x64)

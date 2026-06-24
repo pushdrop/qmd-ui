@@ -45,12 +45,10 @@ extraResources:
     to: index.html
 
 # ── Native module rebuild ─────────────────────────────────────────────────────
-# Only rebuild better-sqlite3 for Electron's Node ABI.
-# tree-sitter-* have native bindings but we use their WASM files via web-tree-sitter.
-# node-llama-cpp is excluded from the bundle entirely (see files above).
-electronRebuild:
-  onlyModules:
-    - better-sqlite3
+# Disable electron-builder's auto-rebuild (it would try to compile ALL native modules,
+# including tree-sitter-* which fail and which we use via WASM anyway).
+# The CI explicitly runs @electron/rebuild -o better-sqlite3 before each arch build.
+npmRebuild: false
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
