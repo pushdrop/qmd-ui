@@ -30,8 +30,7 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   # Notarize after signing — requires APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD env vars
-  notarize:
-    teamId: ${APPLE_TEAM_ID}
+  notarize: true
   target:
     - target: dmg
       arch: [arm64, x64]
