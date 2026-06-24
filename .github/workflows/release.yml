@@ -33,19 +33,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: electron/package-lock.json
 
-      # ── Install qmd (Node.js script — same file works for both arches) ──────
-      - name: Install qmd
-        run: npm install -g @tobilu/qmd
-
-      - name: Bundle qmd binary
-        run: |
-          mkdir -p electron/resources/bin
-          QMD="$(which qmd)"
-          cp "$QMD" electron/resources/bin/qmd-darwin-arm64
-          cp "$QMD" electron/resources/bin/qmd-darwin-x64
-          chmod +x electron/resources/bin/qmd-darwin-arm64
-          chmod +x electron/resources/bin/qmd-darwin-x64
-
       # ── Install Electron dependencies ─────────────────────────────────────
       - name: Install dependencies
         run: npm ci

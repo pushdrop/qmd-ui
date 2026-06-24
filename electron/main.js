@@ -46,20 +46,41 @@ if (!gotLock) {
 // ── qmd binary ───────────────────────────────────────────────────────────
 
 function qmdBin() {
-  if (app.isPackaged) {
-    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-    const bin = path.join(process.resourcesPath, 'bin', `qmd-darwin-${arch}`);
-    if (fs.existsSync(bin)) return bin;
-  }
   return process.env.QMD_BIN || 'qmd';
+}
+
+function extraNodePaths() {
+  const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
+  // nvm: read default alias to find active version bin dir
+  try {
+    const nvmDir = process.env.NVM_DIR || path.join(os.homedir(), '.nvm');
+    const def = fs.readFileSync(path.join(nvmDir, 'alias', 'default'), 'utf8').trim();
+    const candidate = path.join(nvmDir, 'versions', 'node', def, 'bin');
+    if (fs.existsSync(candidate)) extra.unshift(candidate);
+  } catch {}
+  // volta
+  const voltaBin = path.join(os.homedir(), '.volta', 'bin');
+  if (fs.existsSync(voltaBin)) extra.unshift(voltaBin);
+  return extra;
 }
 
 function qmdEnv() {
   return {
     ...process.env,
     QMD_BIN: qmdBin(),
-    PATH: `${process.env.PATH || ''}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`,
+    PATH: [process.env.PATH || '', ...extraNodePaths()].join(':'),
   };
+}
+
+async function checkQmdAvailable() {
+  return new Promise(resolve => {
+    execFile(qmdBin(), ['status'], { env: qmdEnv(), timeout: 8000 },
+      (err) => {
+        // ENOENT = binary not found, 127 = shell "command not found"
+        if (err && (err.code === 'ENOENT' || err.code === 127)) resolve(false);
+        else resolve(true);
+      });
+  });
 }
 
 function runQmd(args) {
@@ -530,6 +551,23 @@ app.whenReady().then(async () => {
   buildMenu();
   createTray();
   if (app.isPackaged) setupAutoUpdater();
+
+  // Verify qmd is installed before continuing
+  const qmdFound = await checkQmdAvailable();
+  if (!qmdFound) {
+    const { response } = await dialog.showMessageBox({
+      type: 'error',
+      title: 'qmd not found',
+      message: 'qmd must be installed to use qmd-ui.',
+      detail: 'Install it with Node.js:\n\n    npm install -g @tobilu/qmd\n\nOr with Bun:\n\n    bun add -g @tobilu/qmd\n\nThen restart qmd-ui.',
+      buttons: ['Quit', 'Open qmd on npm'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (response === 1) shell.openExternal('https://www.npmjs.com/package/@tobilu/qmd');
+    app.quit();
+    return;
+  }
 
   const firstRun  = await isFirstRun();
   const forceSetup = process.env.FORCE_SETUP === '1';

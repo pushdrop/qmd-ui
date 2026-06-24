@@ -17,11 +17,6 @@ extraResources:
     to: server.mjs
   - from: ../index.html
     to: index.html
-  # Bundled qmd binaries — populated by CI, not committed to git
-  - from: resources/bin/
-    to: bin/
-    filter:
-      - "qmd-darwin-*"
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
