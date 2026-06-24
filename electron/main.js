@@ -286,7 +286,7 @@ function createPrefsWindow() {
     return;
   }
   prefsWindow = new BrowserWindow({
-    width: 500, height: 380, resizable: false,
+    width: 520, height: 500, resizable: true, maxHeight: 800,
     title: 'Preferences',
     titleBarStyle: 'default',
     webPreferences: {

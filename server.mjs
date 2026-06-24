@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { execFile, spawn } from 'node:child_process';
-import { readFile, writeFile, access, stat } from 'node:fs/promises';
+import { readFile, writeFile, readdir, access, stat } from 'node:fs/promises';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -11,6 +11,66 @@ const QMD        = process.env.QMD_BIN        || 'qmd';
 const PORT       = Number(process.env.PORT)    || 8765;
 const DAEMON_URL = process.env.QMD_DAEMON_URL  || 'http://localhost:8181';
 const HOME       = homedir();
+const QMD_CONFIG = join(HOME, '.config', 'qmd', 'index.yml');
+
+// ── YAML helpers for ~/.config/qmd/index.yml ─────────────────────────────
+// Targeted parser for the ignore list in qmd's config — no full YAML library needed.
+// Format:
+//   collections:
+//     name:          ← 2-space indent
+//       ignore:      ← 4-space indent
+//         - pat      ← 6-space indent
+
+function yamlGetIgnores(text, collName) {
+  const lines = text.split('\n');
+  let inColl = false, inIgnore = false;
+  const patterns = [];
+  for (const line of lines) {
+    if (!inColl) {
+      if (line === `  ${collName}:`) inColl = true;
+    } else if (!inIgnore) {
+      if (/^  [a-zA-Z0-9_-]/.test(line)) break; // next collection
+      if (line.trimEnd() === '    ignore:') inIgnore = true;
+    } else {
+      const m = line.match(/^      - (.+)/);
+      if (m) patterns.push(m[1].trim().replace(/^["']|["']$/g, ''));
+      else if (line.trim() && !/^\s+-/.test(line)) break;
+    }
+  }
+  return patterns;
+}
+
+function yamlSetIgnores(text, collName, patterns) {
+  const lines = text.split('\n');
+  let inColl = false, ignoreKeyIdx = -1;
+  let ignoreEndIdx = lines.length;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!inColl) {
+      if (line === `  ${collName}:`) inColl = true;
+    } else {
+      if (/^  [a-zA-Z0-9_-]/.test(line) && line !== `  ${collName}:`) {
+        // Moved to next collection — insert ignore block before this line
+        if (ignoreKeyIdx === -1) {
+          const ins = ['    ignore:', ...patterns.map(p => `      - ${p}`)];
+          lines.splice(i, 0, ...ins);
+        }
+        break;
+      }
+      if (line.trimEnd() === '    ignore:') {
+        ignoreKeyIdx = i;
+      } else if (ignoreKeyIdx !== -1) {
+        if (/^      - /.test(line)) continue; // existing list item
+        ignoreEndIdx = i; break;             // first non-list line after ignore
+      }
+    }
+  }
+  if (ignoreKeyIdx === -1) return text; // collection not found
+  const newItems = patterns.map(p => `      - ${p}`);
+  lines.splice(ignoreKeyIdx + 1, ignoreEndIdx - ignoreKeyIdx - 1, ...newItems);
+  return lines.join('\n');
+}
 
 let mcpSessionId = null;
 let collectionRoots = new Map();
@@ -375,6 +435,52 @@ const server = http.createServer(async (req, res) => {
       await exec(QMD, ['collection', 'remove', name]);
       collectionRoots.delete(name);
       await cacheFolders();
+      res.writeHead(200); res.end('OK');
+      return;
+    }
+
+    if (req.method === 'GET' && /^\/api\/collections\/[^/]+\/subdirs$/.test(url.pathname)) {
+      const name = url.pathname.split('/')[3];
+      const collPath = collectionRoots.get(name);
+      if (!collPath) { res.writeHead(404); res.end('Collection not found'); return; }
+
+      const yamlText = await readFile(QMD_CONFIG, 'utf8').catch(() => '');
+      const ignores  = yamlGetIgnores(yamlText, name);
+
+      let entries = [];
+      try { entries = await readdir(collPath, { withFileTypes: true }); } catch {}
+
+      const dirs = entries
+        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .map(e => ({
+          name: e.name,
+          excluded: ignores.some(p =>
+            p === `${e.name}/**` || p === `${e.name}/` || p === e.name),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ collPath, dirs, ignores }));
+      return;
+    }
+
+    if (req.method === 'PUT' && /^\/api\/collections\/[^/]+\/ignores$/.test(url.pathname)) {
+      const name = url.pathname.split('/')[3];
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const { excludedDirs, rawIgnores } = JSON.parse(body);
+      // excludedDirs: string[] of top-level dir names to exclude
+      // rawIgnores:   full existing ignore list (non-top-level patterns preserved)
+
+      // Keep patterns that aren't simple "dirname/**" top-level entries
+      const keepPatterns = (rawIgnores || []).filter(p => !/^[^*/]+\/\*\*$/.test(p) && !/^[^*/]+\/$/.test(p));
+      const newTopLevel  = (excludedDirs || []).map(d => `${d}/**`);
+      const merged = [...keepPatterns, ...newTopLevel];
+
+      const yamlText = await readFile(QMD_CONFIG, 'utf8').catch(() => '');
+      const updated  = yamlSetIgnores(yamlText, name, merged);
+      await writeFile(QMD_CONFIG, updated, 'utf8');
+
       res.writeHead(200); res.end('OK');
       return;
     }

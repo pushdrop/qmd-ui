@@ -7,24 +7,23 @@
     :root {
       --accent: #6366f1; --bg: #f5f5f7; --fg: #1d1d1f;
       --border: #d1d1d6; --card: #fff; --muted: #86868b;
-      --danger: #ef4444; --ok: #22c55e;
+      --danger: #ef4444; --ok: #22c55e; --sub-bg: #f9f9fb;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --accent: #7c8cf8; --bg: #1c1c1e; --fg: #f2f2f7;
         --border: #3a3a3c; --card: #2c2c2e; --muted: #98989d;
+        --sub-bg: #252527;
       }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font: 14px/1.5 system-ui, -apple-system, sans-serif;
       background: var(--bg); color: var(--fg);
-      padding: 24px; user-select: none;
-      -webkit-app-region: no-drag;
+      padding: 24px 24px 16px; user-select: none;
     }
     h1 { font-size: 17px; font-weight: 600; margin-bottom: 3px; }
-    .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
-
+    .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 18px; }
     .section-label {
       font-size: 11px; font-weight: 600; text-transform: uppercase;
       letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px;
@@ -33,42 +32,78 @@
     .collection-list {
       border: 1px solid var(--border); border-radius: 10px;
       overflow: hidden; background: var(--card); margin-bottom: 12px;
+      max-height: 420px; overflow-y: auto;
     }
     .collection-row {
-      display: flex; align-items: center;
-      padding: 11px 14px; border-bottom: 1px solid var(--border); gap: 12px;
+      border-bottom: 1px solid var(--border);
     }
     .collection-row:last-child { border-bottom: none; }
+
+    .coll-header {
+      display: flex; align-items: center;
+      padding: 10px 14px; gap: 10px;
+    }
     .coll-info { flex: 1; min-width: 0; }
     .coll-name { font-weight: 600; font-size: 13px; }
-    .coll-path {
-      font-size: 11px; color: var(--muted);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    .coll-path { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .coll-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .btn-excl {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); cursor: pointer; font-size: 11px; padding: 3px 8px;
+      white-space: nowrap;
     }
+    .btn-excl:hover { color: var(--fg); border-color: var(--fg); }
+    .btn-excl.open { color: var(--accent); border-color: var(--accent); }
     .btn-remove {
       background: none; border: 1px solid var(--border); border-radius: 6px;
-      color: var(--danger); cursor: pointer; font-size: 12px; padding: 4px 10px;
-      flex-shrink: 0;
+      color: var(--danger); cursor: pointer; font-size: 12px; padding: 3px 10px;
     }
     .btn-remove:hover { background: #ef444422; }
-    .btn-remove:disabled { opacity: 0.4; cursor: default; }
+    .btn-remove:disabled, .btn-excl:disabled { opacity: 0.4; cursor: default; }
 
-    .empty {
-      padding: 24px; text-align: center; color: var(--muted); font-size: 13px;
+    /* Exclusion sub-panel */
+    .excl-panel {
+      background: var(--sub-bg); border-top: 1px solid var(--border);
+      padding: 12px 14px 14px;
     }
+    .excl-hint {
+      font-size: 11px; color: var(--muted); margin-bottom: 10px;
+    }
+    .dir-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 4px 12px; margin-bottom: 12px;
+    }
+    .dir-item { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .dir-item input[type=checkbox] { cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+    .dir-label { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dir-label.excluded { color: var(--muted); text-decoration: line-through; }
+    .excl-footer { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-save {
+      background: var(--accent); border: none; border-radius: 7px;
+      color: #fff; cursor: pointer; font-size: 12px; font-weight: 500; padding: 5px 14px;
+    }
+    .btn-save:hover { opacity: 0.88; }
+    .btn-cancel {
+      background: none; border: 1px solid var(--border); border-radius: 7px;
+      color: var(--fg); cursor: pointer; font-size: 12px; padding: 5px 14px;
+    }
+    .btn-cancel:hover { background: var(--border); }
+    .excl-status { flex: 1; font-size: 11px; color: var(--muted); align-self: center; }
+    .excl-status.ok  { color: var(--ok); }
+    .excl-status.err { color: var(--danger); }
 
+    .empty { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    /* Bottom action bar */
     .actions { display: flex; gap: 8px; align-items: center; }
     .btn-add {
       background: var(--accent); border: none; border-radius: 8px;
-      color: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
-      padding: 8px 16px;
+      color: #fff; cursor: pointer; font-size: 13px; font-weight: 500; padding: 8px 16px;
     }
     .btn-add:hover { opacity: 0.88; }
     .btn-add:disabled { opacity: 0.5; cursor: default; }
-
-    #status {
-      flex: 1; font-size: 12px; color: var(--muted); min-height: 18px;
-    }
+    #status { flex: 1; font-size: 12px; color: var(--muted); }
     #status.ok  { color: var(--ok); }
     #status.err { color: var(--danger); }
   </style>
@@ -90,26 +125,29 @@
   <script>
     const API = 'http://127.0.0.1:8765';
     let busy = false;
-
-    function slugify(s) {
-      return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'notes';
-    }
+    // Track which collection's exclusion panel is open and its loaded data
+    let openExcl = null; // { name, dirs, ignores }
 
     function setStatus(msg, cls = '') {
       const el = document.getElementById('status');
-      el.textContent = msg;
-      el.className = cls;
+      el.textContent = msg; el.className = cls;
     }
-
     function setBusy(val) {
       busy = val;
       document.getElementById('btn-add').disabled = val;
-      document.querySelectorAll('.btn-remove').forEach(b => b.disabled = val);
     }
+    function shortenPath(p) {
+      const home = p.match(/^\/Users\/[^/]+/)?.[0];
+      return home ? '~' + p.slice(home.length) : p;
+    }
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function escAttr(s) { return String(s).replace(/'/g, "\\'"); }
 
     async function loadCollections() {
       try {
-        const res = await fetch(`${API}/api/collections`);
+        const res  = await fetch(`${API}/api/collections`);
         const cols = await res.json();
         const list = document.getElementById('list');
         if (!cols.length) {
@@ -117,12 +155,19 @@
           return;
         }
         list.innerHTML = cols.map(c => `
-          <div class="collection-row">
-            <div class="coll-info">
-              <div class="coll-name">${escHtml(c.name)}</div>
-              <div class="coll-path" title="${escHtml(c.path)}">${escHtml(shortenPath(c.path))}</div>
+          <div class="collection-row" id="row-${esc(c.name)}">
+            <div class="coll-header">
+              <div class="coll-info">
+                <div class="coll-name">${esc(c.name)}</div>
+                <div class="coll-path" title="${esc(c.path)}">${esc(shortenPath(c.path))}</div>
+              </div>
+              <div class="coll-actions">
+                <button class="btn-excl" id="excl-btn-${esc(c.name)}"
+                        onclick="toggleExcl('${escAttr(c.name)}')">▸ exclusions</button>
+                <button class="btn-remove" onclick="removeCollection('${escAttr(c.name)}')">Remove</button>
+              </div>
             </div>
-            <button class="btn-remove" onclick="removeCollection('${escAttr(c.name)}')">Remove</button>
+            <div id="excl-panel-${esc(c.name)}" style="display:none"></div>
           </div>
         `).join('');
       } catch (e) {
@@ -131,11 +176,116 @@
       }
     }
 
+    async function toggleExcl(name) {
+      const panel = document.getElementById(`excl-panel-${name}`);
+      const btn   = document.getElementById(`excl-btn-${name}`);
+      if (panel.style.display !== 'none') {
+        panel.style.display = 'none';
+        btn.classList.remove('open');
+        btn.textContent = '▸ exclusions';
+        openExcl = null;
+        return;
+      }
+      btn.textContent = '… loading';
+      try {
+        const res  = await fetch(`${API}/api/collections/${encodeURIComponent(name)}/subdirs`);
+        const data = await res.json();
+        openExcl = { name, ...data };
+        renderExclPanel(name, panel, data);
+        panel.style.display = 'block';
+        btn.classList.add('open');
+        updateExclBtnLabel(name, data.dirs);
+      } catch (e) {
+        btn.textContent = '▸ exclusions';
+        setStatus('Could not load exclusions: ' + e.message, 'err');
+      }
+    }
+
+    function renderExclPanel(name, panel, { dirs, collPath, ignores }) {
+      const excluded = dirs.filter(d => d.excluded).length;
+      panel.innerHTML = `
+        <div class="excl-panel">
+          <p class="excl-hint">
+            Uncheck folders to exclude them from search. Changes take effect after the next reindex.
+          </p>
+          <div class="dir-grid" id="dir-grid-${esc(name)}">
+            ${dirs.length === 0
+              ? '<span style="font-size:12px;color:var(--muted)">No subdirectories found.</span>'
+              : dirs.map(d => `
+                <label class="dir-item">
+                  <input type="checkbox" ${d.excluded ? '' : 'checked'}
+                         onchange="onDirToggle('${escAttr(name)}')"
+                         data-dirname="${esc(d.name)}">
+                  <span class="dir-label${d.excluded ? ' excluded' : ''}">${esc(d.name)}</span>
+                </label>`).join('')}
+          </div>
+          <div class="excl-footer">
+            <span class="excl-status" id="excl-status-${esc(name)}"></span>
+            <button class="btn-cancel" onclick="cancelExcl('${escAttr(name)}')">Cancel</button>
+            <button class="btn-save"   onclick="saveExcl('${escAttr(name)}', ${JSON.stringify(ignores)})">Save</button>
+          </div>
+        </div>`;
+    }
+
+    function onDirToggle(name) {
+      // Update label strikethrough live
+      const grid = document.getElementById(`dir-grid-${name}`);
+      grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        const label = cb.nextElementSibling;
+        label.classList.toggle('excluded', !cb.checked);
+      });
+    }
+
+    function updateExclBtnLabel(name, dirs) {
+      const btn = document.getElementById(`excl-btn-${name}`);
+      const n   = dirs.filter(d => d.excluded).length;
+      btn.textContent = n > 0 ? `▾ ${n} excluded` : '▾ exclusions';
+    }
+
+    function cancelExcl(name) {
+      const panel = document.getElementById(`excl-panel-${name}`);
+      const btn   = document.getElementById(`excl-btn-${name}`);
+      panel.style.display = 'none';
+      btn.classList.remove('open');
+      if (openExcl?.name === name) {
+        updateExclBtnLabel(name, openExcl.dirs);
+        openExcl = null;
+      }
+    }
+
+    async function saveExcl(name, rawIgnores) {
+      const grid = document.getElementById(`dir-grid-${name}`);
+      const excludedDirs = [];
+      grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        if (!cb.checked) excludedDirs.push(cb.dataset.dirname);
+      });
+
+      const statusEl = document.getElementById(`excl-status-${name}`);
+      statusEl.textContent = 'Saving…'; statusEl.className = 'excl-status';
+      try {
+        const r = await fetch(`${API}/api/collections/${encodeURIComponent(name)}/ignores`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ excludedDirs, rawIgnores }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        statusEl.textContent = 'Saved — reindex to apply';
+        statusEl.className   = 'excl-status ok';
+        // Update local state so label reflects new counts
+        if (openExcl?.name === name) {
+          openExcl.dirs.forEach(d => { d.excluded = excludedDirs.includes(d.name); });
+          updateExclBtnLabel(name, openExcl.dirs);
+        }
+      } catch (e) {
+        statusEl.textContent = 'Error: ' + e.message;
+        statusEl.className   = 'excl-status err';
+      }
+    }
+
     async function removeCollection(name) {
       if (busy) return;
       if (!confirm(`Remove "${name}" from qmd?\n\nThe folder itself will not be deleted.`)) return;
-      setBusy(true);
-      setStatus('Removing…');
+      setBusy(true); setStatus('Removing…');
       try {
         const res = await fetch(`${API}/api/collections/${encodeURIComponent(name)}`, { method: 'DELETE' });
         if (!res.ok) throw new Error(await res.text());
@@ -143,43 +293,25 @@
         await loadCollections();
       } catch (e) {
         setStatus('Error: ' + e.message, 'err');
-      } finally {
-        setBusy(false);
-      }
+      } finally { setBusy(false); }
     }
 
     async function addFolder() {
       if (busy) return;
       const picked = await window.qmdSetup.openFolderDialog();
       if (!picked) return;
-      setBusy(true);
-      setStatus('Adding and indexing… this may take a moment');
+      setBusy(true); setStatus('Adding and indexing… this may take a moment');
       try {
-        const res = await fetch(`${API}/api/collections`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const r = await fetch(`${API}/api/collections`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: picked.name, dir: picked.dir }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!r.ok) throw new Error(await r.text());
         setStatus(`Added "${picked.name}" — indexing in background`, 'ok');
         await loadCollections();
       } catch (e) {
         setStatus('Error: ' + e.message, 'err');
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    function shortenPath(p) {
-      const home = p.match(/^\/Users\/[^/]+/)?.[0];
-      return home ? '~' + p.slice(home.length) : p;
-    }
-
-    function escHtml(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-    function escAttr(s) {
-      return String(s).replace(/'/g, '\\\'');
+      } finally { setBusy(false); }
     }
 
     loadCollections();
