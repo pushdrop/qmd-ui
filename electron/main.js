@@ -1,91 +1,235 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, shell } = require('electron');
 const { utilityProcess } = require('electron');
-const path = require('path');
-const fs = require('fs');
+const path    = require('path');
+const fs      = require('fs');
+const fsp     = require('fs/promises');
+const os      = require('os');
+const { execFile, spawn } = require('child_process');
 
-const SERVER_PATH = path.resolve(__dirname, '..', 'server.mjs');
-const PORT = Number(process.env.PORT) || 8765;
-const SERVER_URL = `http://127.0.0.1:${PORT}`;
+const SERVER_PATH  = path.resolve(__dirname, '..', 'server.mjs');
+const PRELOAD_PATH = path.join(__dirname, 'preload.js');
+const SETUP_PATH   = path.join(__dirname, 'setup.html');
+const PORT         = Number(process.env.PORT) || 8765;
+const SERVER_URL   = `http://127.0.0.1:${PORT}`;
+const CONFIG_PATH  = path.join(app.getPath('userData'), 'config.json');
 
-let mainWindow = null;
+let mainWindow   = null;
+let wizardWindow = null;
 let serverProcess = null;
-let quitting = false;
+let quitting     = false;
 
-// ── single instance ──────────────────────────────────────────────────────────
+// ── single instance ──────────────────────────────────────────────────────
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    const win = mainWindow || wizardWindow;
+    if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
   });
 }
 
-// ── qmd binary path ──────────────────────────────────────────────────────────
+// ── qmd binary ───────────────────────────────────────────────────────────
 
 function qmdBin() {
   if (app.isPackaged) {
-    // Bundled binary copied in by CI — see electron-builder.yml extraResources
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
     const bin = path.join(process.resourcesPath, 'bin', `qmd-darwin-${arch}`);
     if (fs.existsSync(bin)) return bin;
-    // Fall through to system qmd if somehow missing (should not happen in production)
   }
   return process.env.QMD_BIN || 'qmd';
 }
 
-// ── server process ───────────────────────────────────────────────────────────
+function qmdEnv() {
+  return {
+    ...process.env,
+    QMD_BIN: qmdBin(),
+    PATH: `${process.env.PATH || ''}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`,
+  };
+}
+
+function runQmd(args) {
+  return new Promise((resolve, reject) => {
+    execFile(qmdBin(), args, { env: qmdEnv(), maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        if (err) { err.stderr = stderr; reject(err); }
+        else resolve(stdout);
+      });
+  });
+}
+
+// ── server process ────────────────────────────────────────────────────────
 
 async function isPortFree(port) {
   try {
     const r = await fetch(`http://127.0.0.1:${port}/`);
-    return !r.ok; // if something answered, port is in use
+    return !r.ok;
   } catch {
-    return true; // connection refused → port is free
+    return true;
   }
 }
 
 function startServer() {
-  const env = {
-    ...process.env,
-    QMD_BIN: qmdBin(),
-    PORT: String(PORT),
-    // Ensure Homebrew paths are available even in a sandboxed Electron env
-    PATH: `${process.env.PATH || ''}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`,
-  };
-
-  serverProcess = utilityProcess.fork(SERVER_PATH, [], { env, stdio: 'pipe' });
-
-  serverProcess.stdout?.on('data', chunk => process.stdout.write('[server] ' + chunk));
-  serverProcess.stderr?.on('data', chunk => process.stderr.write('[server] ' + chunk));
-
+  serverProcess = utilityProcess.fork(SERVER_PATH, [], {
+    env: qmdEnv(),
+    stdio: 'pipe',
+  });
+  serverProcess.stdout?.on('data', c => process.stdout.write('[server] ' + c));
+  serverProcess.stderr?.on('data', c => process.stderr.write('[server] ' + c));
   serverProcess.on('exit', code => {
     if (!quitting) {
-      console.log(`[server] exited (code ${code}), restarting in 2 s…`);
+      console.log(`[server] exited (${code}), restarting in 2 s`);
       setTimeout(startServer, 2000);
     }
   });
 }
 
-async function waitForServer(timeoutMs = 60_000) {
-  const deadline = Date.now() + timeoutMs;
+async function waitForServer(ms = 60_000) {
+  const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
-    try {
-      const r = await fetch(`${SERVER_URL}/`);
-      if (r.ok) return true;
-    } catch {}
+    try { const r = await fetch(`${SERVER_URL}/`); if (r.ok) return true; } catch {}
     await new Promise(r => setTimeout(r, 500));
   }
   return false;
 }
 
-// ── window ───────────────────────────────────────────────────────────────────
+// ── first-run detection ───────────────────────────────────────────────────
+
+async function isFirstRun() {
+  try {
+    const cfg = JSON.parse(await fsp.readFile(CONFIG_PATH, 'utf8'));
+    return !cfg.setupDone;
+  } catch {
+    return true;
+  }
+}
+
+async function markSetupDone() {
+  await fsp.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
+  await fsp.writeFile(CONFIG_PATH, JSON.stringify({ setupDone: true }), 'utf8');
+}
+
+async function hasQmdCollections() {
+  try {
+    const out = await runQmd(['collection', 'list']);
+    return /^[a-zA-Z0-9_-]+\s+\(qmd:\/\//m.test(out);
+  } catch {
+    return false;
+  }
+}
+
+// ── folder scanning ───────────────────────────────────────────────────────
+
+const HIGH_CONFIDENCE = [
+  'notes', 'obsidian', 'writing', 'journal', 'blog', 'wiki',
+  'knowledge', 'vault', 'pkm', 'zettelkasten', 'logseq', 'roam',
+  'bear', 'craft', 'drafts', 'dendron', 'foam', 'second brain',
+];
+const SKIP_TOP = new Set([
+  'library', 'applications', 'movies', 'music', 'pictures',
+  'public', 'developer', 'sites',
+]);
+
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'notes';
+}
+
+async function countMdFiles(dir, maxDepth) {
+  let count = 0;
+  async function walk(d, depth) {
+    if (depth > maxDepth || count > 200) return;
+    let entries;
+    try { entries = await fsp.readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      if (e.isDirectory() && depth < maxDepth) await walk(path.join(d, e.name), depth + 1);
+      else if (e.isFile() && e.name.endsWith('.md')) count++;
+      if (count > 200) return;
+    }
+  }
+  await walk(dir, 0);
+  return count;
+}
+
+async function scanForNoteFolders() {
+  const home = os.homedir();
+  const candidates = [];
+  const seen = new Set();
+
+  function add(dir, label, checked) {
+    const real = path.resolve(dir);
+    if (seen.has(real)) return;
+    seen.add(real);
+    candidates.push({ dir: real, name: slugify(label), label, checked, count: 0 });
+  }
+
+  // iCloud Obsidian (highest priority — very specific path)
+  const iCloudObs = path.join(home, 'Library/Mobile Documents/iCloud~md~obsidian');
+  if (fs.existsSync(iCloudObs)) add(iCloudObs, 'Obsidian (iCloud)', true);
+
+  let topDirs = [];
+  try { topDirs = await fsp.readdir(home, { withFileTypes: true }); } catch {}
+
+  for (const entry of topDirs) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    if (SKIP_TOP.has(entry.name.toLowerCase())) continue;
+
+    const full = path.join(home, entry.name);
+    const lower = entry.name.toLowerCase();
+
+    if (entry.name === 'Documents') {
+      // Scan Documents subdirs — don't add Documents itself (too broad)
+      let docDirs = [];
+      try { docDirs = await fsp.readdir(full, { withFileTypes: true }); } catch {}
+      for (const de of docDirs) {
+        if (!de.isDirectory() || de.name.startsWith('.')) continue;
+        const deFull = path.join(full, de.name);
+        const deLower = de.name.toLowerCase();
+        const isKnown = HIGH_CONFIDENCE.some(n => deLower.includes(n));
+        if (isKnown) {
+          add(deFull, `${de.name}`, true);
+        } else {
+          const n = await countMdFiles(deFull, 2);
+          if (n >= 5) add(deFull, `Documents/${de.name}`, n >= 20);
+        }
+      }
+    } else if (entry.name === 'Dropbox') {
+      // Scan Dropbox subdirs
+      let dropDirs = [];
+      try { dropDirs = await fsp.readdir(full, { withFileTypes: true }); } catch {}
+      for (const de of dropDirs) {
+        if (!de.isDirectory() || de.name.startsWith('.')) continue;
+        const deFull = path.join(full, de.name);
+        const deLower = de.name.toLowerCase();
+        const isKnown = HIGH_CONFIDENCE.some(n => deLower.includes(n));
+        const n = isKnown ? 10 : await countMdFiles(deFull, 2);
+        if (isKnown || n >= 10) add(deFull, `Dropbox/${de.name}`, n >= 5 || isKnown);
+      }
+    } else if (HIGH_CONFIDENCE.some(n => lower.includes(n))) {
+      add(full, entry.name, true);
+    } else {
+      const n = await countMdFiles(full, 2);
+      if (n >= 10) add(full, entry.name, n >= 50);
+    }
+  }
+
+  // Populate md file counts for all candidates
+  await Promise.all(candidates.map(async c => {
+    if (c.count === 0) c.count = await countMdFiles(c.dir, 3);
+  }));
+
+  // Don't auto-check folders with no markdown files
+  for (const c of candidates) {
+    if (c.count === 0) c.checked = false;
+  }
+
+  return candidates;
+}
+
+// ── window creation ───────────────────────────────────────────────────────
 
 function loadingHTML() {
   const dark = nativeTheme.shouldUseDarkColors;
@@ -97,43 +241,42 @@ function loadingHTML() {
     <body>Starting qmd-ui…</body></html>`;
 }
 
-function errorHTML(msg) {
-  return `data:text/html,<!doctype html><html><head><meta charset="utf-8"><style>
-    body{margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;background:#141414;color:#f87171;font:14px system-ui,-apple-system;gap:8px;}
-    code{font-size:12px;color:#888;}</style></head>
-    <body><div>${msg}</div><code>Check the logs for details.</code></body></html>`;
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280, height: 820, minWidth: 700, minHeight: 500,
+    titleBarStyle: 'default',
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+  });
+  mainWindow.loadURL(loadingHTML());
+  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost'))
+      return { action: 'allow' };
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  return mainWindow;
 }
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 700,
-    minHeight: 500,
-    // Standard title bar for Phase 1 — custom hiddenInset comes with wizard in Phase 2
+function createWizardWindow() {
+  wizardWindow = new BrowserWindow({
+    width: 620, height: 540, resizable: false,
     titleBarStyle: 'default',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,          // preload needs require('electron')
+      preload: PRELOAD_PATH,
     },
   });
-
-  mainWindow.loadURL(loadingHTML());
-  mainWindow.on('closed', () => { mainWindow = null; });
-
-  // Open external links in the default browser, not in the app window
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
-      return { action: 'allow' };
-    }
-    shell.openExternal(url);
-    return { action: 'deny' };
+  wizardWindow.loadFile(SETUP_PATH);
+  wizardWindow.on('closed', () => {
+    wizardWindow = null;
+    if (!mainWindow) app.quit();  // quit if wizard closed without finishing
   });
 }
 
-// ── menu ─────────────────────────────────────────────────────────────────────
+// ── app menu ─────────────────────────────────────────────────────────────
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
@@ -143,78 +286,140 @@ function buildMenu() {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        // Preferences enabled in Phase 4
         { label: 'Preferences…', accelerator: 'Cmd+,', enabled: false, click: () => {} },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
+        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
         { type: 'separator' },
         { role: 'quit' },
       ],
     }] : []),
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
-        { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
-      ],
-    },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-      ],
-    },
-    {
-      label: 'Window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ role: 'close' }]),
-      ],
-    },
+    { label: 'Edit', submenu: [
+      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+      { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
+    ]},
+    { label: 'View', submenu: [
+      { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' },
+      { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
+      { type: 'separator' }, { role: 'togglefullscreen' },
+    ]},
+    { label: 'Window', submenu: [
+      { role: 'minimize' }, { role: 'zoom' },
+      ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ role: 'close' }]),
+    ]},
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+// ── IPC handlers (used by wizard) ─────────────────────────────────────────
 
-app.whenReady().then(async () => {
-  buildMenu();
-  createWindow();
+ipcMain.handle('scan-folders', async () => {
+  return scanForNoteFolders();
+});
 
-  // Don't compete with a server already on this port (e.g. dev LaunchAgent)
-  if (await isPortFree(PORT)) {
-    startServer();
-  } else {
-    console.log(`[main] port ${PORT} already in use, skipping server spawn`);
-  }
+ipcMain.handle('add-collection', async (_, { name, dir }) => {
+  // qmd collection add <name> <path>
+  return runQmd(['collection', 'add', name, dir]);
+});
 
-  const ready = await waitForServer();
+ipcMain.handle('open-folder-dialog', async () => {
+  const result = await dialog.showOpenDialog(wizardWindow, {
+    properties: ['openDirectory'],
+    title: 'Choose a folder to index',
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const dir = result.filePaths[0];
+  return { dir, name: slugify(path.basename(dir)), label: path.basename(dir), checked: true, count: 0 };
+});
 
-  if (mainWindow) {
-    if (ready) {
-      mainWindow.loadURL(SERVER_URL);
-    } else {
-      mainWindow.loadURL(errorHTML('Server failed to start after 60 s.'));
-    }
-  }
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+ipcMain.handle('run-update', async () => {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(qmdBin(), ['update'], { env: qmdEnv() });
+    proc.stdout.on('data', chunk => {
+      const line = chunk.toString().trim();
+      if (line && wizardWindow) wizardWindow.webContents.send('update-progress', line);
+    });
+    proc.stderr.on('data', chunk => {
+      const line = chunk.toString().trim();
+      if (line && wizardWindow) wizardWindow.webContents.send('update-progress', line);
+    });
+    proc.on('exit', code => {
+      if (code === 0) resolve();
+      else reject(new Error(`qmd update exited with code ${code}`));
+    });
+    proc.on('error', reject);
   });
 });
 
-app.on('before-quit', () => { quitting = true; });
+ipcMain.handle('run-embed', async () => {
+  // Fire-and-forget — don't block the wizard
+  const proc = spawn(qmdBin(), ['embed'], { env: qmdEnv(), stdio: 'ignore' });
+  proc.unref();
+  return 'started';
+});
 
+ipcMain.handle('get-status', async () => {
+  return runQmd(['status']);
+});
+
+ipcMain.handle('finish-setup', async () => {
+  await markSetupDone();
+
+  // Create main window FIRST so its existence prevents app.quit() in wizard's closed handler
+  createMainWindow();
+
+  if (wizardWindow) { wizardWindow.destroy(); wizardWindow = null; }
+
+  if (await isPortFree(PORT)) startServer();
+
+  const ready = await waitForServer();
+  if (mainWindow) {
+    mainWindow.loadURL(ready ? SERVER_URL :
+      `data:text/html,<!doctype html><html><body style="background:#141414;color:#f87171;font:14px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">Server failed to start.</body></html>`);
+  }
+});
+
+// ── main ──────────────────────────────────────────────────────────────────
+
+app.whenReady().then(async () => {
+  buildMenu();
+
+  const firstRun = await isFirstRun();
+
+  const forceSetup = process.env.FORCE_SETUP === '1';
+
+  if (firstRun || forceSetup) {
+    const alreadyConfigured = !forceSetup && await hasQmdCollections();
+    if (alreadyConfigured) {
+      // Existing CLI user — skip wizard, mark done, go straight to app
+      await markSetupDone();
+      launchMainApp();
+    } else {
+      // Truly new user (or forced) — show setup wizard
+      createWizardWindow();
+    }
+  } else {
+    launchMainApp();
+  }
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      isFirstRun().then(first => {
+        if (first) createWizardWindow(); else launchMainApp();
+      });
+    }
+  });
+});
+
+async function launchMainApp() {
+  createMainWindow();
+  if (await isPortFree(PORT)) startServer();
+  const ready = await waitForServer();
+  if (mainWindow) mainWindow.loadURL(ready ? SERVER_URL : loadingHTML());
+}
+
+app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });

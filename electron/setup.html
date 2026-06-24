@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>qmd-ui Setup</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --text: #1d1d1f;
+  --dim: #86868b;
+  --dimmer: #c7c7cc;
+  --accent: #6366f1;
+  --accent-dim: #e0e7ff;
+  --border: #d8d8d8;
+  --green: #34c759;
+  --red: #ff3b30;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141414;
+    --card: #1e1e1e;
+    --text: #e8e8e8;
+    --dim: #888;
+    --dimmer: #444;
+    --accent: #7c8cf8;
+    --accent-dim: #1e2044;
+    --border: #2a2a2a;
+    --green: #30d158;
+    --red: #ff453a;
+  }
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ── step container ─────────────────────── */
+.step {
+  display: none;
+  flex-direction: column;
+  height: 100vh;
+  padding: 32px 40px 28px;
+}
+.step.active { display: flex; }
+
+/* ── progress dots ──────────────────────── */
+.dots {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+  flex-shrink: 0;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dimmer);
+  transition: background 0.2s;
+}
+.dot.on { background: var(--accent); }
+
+/* ── typography ─────────────────────────── */
+h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin-bottom: 8px;
+}
+.sub {
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+/* ── folder list ─────────────────────────── */
+.folder-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.folder-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.1s;
+  border: 1px solid transparent;
+}
+.folder-item:hover { background: var(--card); }
+.folder-item.checked { background: var(--card); border-color: var(--border); }
+
+.folder-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--dimmer);
+  background: transparent;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.folder-item.checked .folder-checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.folder-checkbox svg { display: none; }
+.folder-item.checked .folder-checkbox svg { display: block; }
+
+.folder-info { flex: 1; min-width: 0; }
+.folder-name {
+  font-weight: 500;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder-path {
+  color: var(--dim);
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder-count {
+  font-size: 11px;
+  color: var(--dim);
+  flex-shrink: 0;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.add-folder-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: background 0.1s;
+}
+.add-folder-btn:hover { background: var(--card); }
+
+/* ── progress step ───────────────────────── */
+.progress-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.progress-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.progress-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.progress-icon.spinning { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.progress-label { font-size: 13px; font-weight: 500; flex: 1; }
+.progress-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+.log-area {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font: 11px/1.6 ui-monospace, monospace;
+  color: var(--dim);
+  height: 80px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+/* ── done step ───────────────────────────── */
+.done-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+.done-icon svg { color: var(--accent); }
+
+.tips {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin: 20px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.tip-key {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.embed-note {
+  font-size: 11px;
+  color: var(--dim);
+  text-align: center;
+}
+
+/* ── nav buttons ─────────────────────────── */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  flex-shrink: 0;
+}
+.btn {
+  padding: 7px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s;
+}
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn-ghost { background: none; color: var(--dim); }
+.btn-ghost:hover:not(:disabled) { color: var(--text); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { opacity: 0.88; }
+
+/* ── scanning spinner ────────────────────── */
+.scanning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 0;
+  color: var(--dim);
+  font-size: 13px;
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── empty state ─────────────────────────── */
+.empty-note {
+  color: var(--dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 32px 0;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Step 1: Welcome ─────────────────────────────────────────────── -->
+<div id="step-1" class="step active">
+  <div class="dots">
+    <div class="dot on"></div><div class="dot"></div>
+    <div class="dot"></div><div class="dot"></div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+    <h1>Welcome to qmd-ui</h1>
+    <p class="sub">
+      Instant search for all your markdown notes.<br>
+      We'll help you get set up in about two minutes.<br><br>
+      Everything stays on your Mac — nothing leaves your computer.
+    </p>
+  </div>
+
+  <div class="nav">
+    <button class="btn btn-primary" onclick="goStep2()">Get started →</button>
+  </div>
+</div>
+
+<!-- ── Step 2: Choose folders ──────────────────────────────────────── -->
+<div id="step-2" class="step">
+  <div class="dots">
+    <div class="dot"></div><div class="dot on"></div>
+    <div class="dot"></div><div class="dot"></div>
+  </div>
+
+  <h1>Which folders should we search?</h1>
+  <p class="sub">
+    We'll build a search index for these. You can change them anytime in Preferences.
+    Hidden folders, node_modules, and system files are skipped automatically.
+  </p>
+
+  <div class="folder-list" id="folder-list">
+    <div class="scanning">
+      <div class="spinner"></div> Scanning for notes…
+    </div>
+  </div>
+
+  <div class="nav">
+    <button class="btn btn-ghost" onclick="goStep1()">Back</button>
+    <button class="btn btn-primary" id="continue-btn" onclick="goStep3()" disabled>
+      Index selected →
+    </button>
+  </div>
+</div>
+
+<!-- ── Step 3: Indexing ────────────────────────────────────────────── -->
+<div id="step-3" class="step">
+  <div class="dots">
+    <div class="dot"></div><div class="dot"></div>
+    <div class="dot on"></div><div class="dot"></div>
+  </div>
+
+  <h1>Building your search index</h1>
+  <p class="sub">This takes under a minute. Deep semantic search is also being
+  set up in the background and improves over the next few minutes.</p>
+
+  <div class="progress-list" id="progress-list"></div>
+
+  <div class="log-area" id="log-area">Indexing…</div>
+</div>
+
+<!-- ── Step 4: Done ───────────────────────────────────────────────── -->
+<div id="step-4" class="step">
+  <div class="dots">
+    <div class="dot"></div><div class="dot"></div>
+    <div class="dot"></div><div class="dot on"></div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+    <div class="done-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+
+    <h1>You're ready</h1>
+    <p class="sub" id="done-sub">Your notes are indexed and ready to search.</p>
+
+    <div class="tips">
+      <div class="tip">
+        <span class="tip-key">type</span>
+        <span>Instant keyword search as you type</span>
+      </div>
+      <div class="tip">
+        <span class="tip-key">↩</span>
+        <span>Deep semantic search — finds meaning, not just words</span>
+      </div>
+      <div class="tip">
+        <span class="tip-key">⌘E</span>
+        <span>Edit any note directly in the app</span>
+      </div>
+      <div class="tip">
+        <span class="tip-key">⌘O</span>
+        <span>Open in your default editor</span>
+      </div>
+    </div>
+
+    <p class="embed-note" id="embed-note">
+      Deep search is being set up in the background — it'll be ready in a few minutes.
+    </p>
+  </div>
+
+  <div class="nav">
+    <button class="btn btn-primary" onclick="finish()">Open qmd-ui →</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── state ─────────────────────────────────────────────────────────────────
+let folders = [];      // [{ dir, name, label, checked, count }]
+let selected = [];     // the checked subset when we enter step 3
+
+// ── helpers ───────────────────────────────────────────────────────────────
+function friendlyPath(p) {
+  const home = p.match(/^\/Users\/([^/]+)/);
+  if (home) return p.replace(/^\/Users\/[^/]+/, '~');
+  return p;
+}
+
+function countLabel(n) {
+  if (n === 0) return 'no .md files detected';
+  if (n >= 100) return '100+ files';
+  return n + ' file' + (n !== 1 ? 's' : '');
+}
+
+// ── step 1 → 2 ───────────────────────────────────────────────────────────
+async function goStep2() {
+  showStep(2);
+  folders = [];
+  renderFolderList(); // show scanning spinner
+
+  try {
+    folders = await window.qmdSetup.scanFolders();
+  } catch (e) {
+    folders = [];
+  }
+
+  renderFolderList();
+  updateContinueBtn();
+}
+
+function renderFolderList() {
+  const list = document.getElementById('folder-list');
+
+  if (!folders) {
+    list.innerHTML = '<div class="scanning"><div class="spinner"></div> Scanning…</div>';
+    return;
+  }
+
+  if (folders.length === 0) {
+    list.innerHTML = `
+      <div class="empty-note">No note folders detected automatically.</div>
+      <button class="add-folder-btn" onclick="addFolder()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Add a folder…
+      </button>`;
+    return;
+  }
+
+  list.innerHTML = folders.map((f, i) => `
+    <div class="folder-item ${f.checked ? 'checked' : ''}" onclick="toggleFolder(${i})">
+      <div class="folder-checkbox">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white"
+             stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="folder-info">
+        <div class="folder-name">${escHtml(f.label)}</div>
+        <div class="folder-path">${escHtml(friendlyPath(f.dir))}</div>
+      </div>
+      <div class="folder-count">${countLabel(f.count || 0)}</div>
+    </div>
+  `).join('') + `
+    <button class="add-folder-btn" onclick="addFolder()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Add another folder…
+    </button>`;
+}
+
+function toggleFolder(i) {
+  folders[i].checked = !folders[i].checked;
+  renderFolderList();
+  updateContinueBtn();
+}
+
+function updateContinueBtn() {
+  const btn = document.getElementById('continue-btn');
+  const n = folders.filter(f => f.checked).length;
+  btn.disabled = n === 0;
+  btn.textContent = n === 0 ? 'Index selected →'
+                 : n === 1 ? 'Index 1 folder →'
+                 : `Index ${n} folders →`;
+}
+
+async function addFolder() {
+  const result = await window.qmdSetup.openFolderDialog();
+  if (!result) return;
+  // Don't add duplicates
+  if (folders.some(f => f.dir === result.dir)) return;
+  folders.push({ ...result, checked: true });
+  renderFolderList();
+  updateContinueBtn();
+}
+
+// ── step 2 → 3 ───────────────────────────────────────────────────────────
+async function goStep3() {
+  selected = folders.filter(f => f.checked);
+  showStep(3);
+
+  // Build progress list
+  const list = document.getElementById('progress-list');
+  list.innerHTML = selected.map((f, i) => `
+    <div class="progress-item" id="prog-${i}">
+      <div class="progress-icon" id="prog-icon-${i}">○</div>
+      <div>
+        <div class="progress-label">${escHtml(f.label)}</div>
+        <div class="progress-sub" id="prog-sub-${i}">${escHtml(friendlyPath(f.dir))}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const logArea = document.getElementById('log-area');
+  logArea.textContent = '';
+
+  window.qmdSetup.onProgress(msg => {
+    logArea.textContent += msg + '\n';
+    logArea.scrollTop = logArea.scrollHeight;
+  });
+
+  // Add each collection
+  for (let i = 0; i < selected.length; i++) {
+    const f = selected[i];
+    setProgIcon(i, '⟳', true);
+    setProbSub(i, 'Adding to index…');
+    try {
+      await window.qmdSetup.addCollection(f.name, f.dir);
+      setProgIcon(i, '✓', false, 'var(--green)');
+      setProbSub(i, 'Added');
+    } catch (e) {
+      setProgIcon(i, '✗', false, 'var(--red)');
+      setProbSub(i, 'Failed: ' + (e.message || 'unknown error'));
+    }
+  }
+
+  // Run qmd update (streams progress via onProgress)
+  logArea.textContent = 'Running qmd update…\n';
+  try {
+    await window.qmdSetup.runUpdate();
+    logArea.textContent += '\nDone.\n';
+  } catch (e) {
+    logArea.textContent += '\nError: ' + (e.message || 'update failed') + '\n';
+  }
+
+  // Fire-and-forget embed (deep search) — don't await, just kick it off
+  window.qmdSetup.runEmbed().catch(() => {});
+
+  goStep4();
+}
+
+function setProgIcon(i, text, spin, color) {
+  const el = document.getElementById(`prog-icon-${i}`);
+  el.textContent = text;
+  el.className = 'progress-icon' + (spin ? ' spinning' : '');
+  if (color) el.style.color = color;
+}
+
+function setProbSub(i, text) {
+  const el = document.getElementById(`prog-sub-${i}`);
+  if (el) el.textContent = text;
+}
+
+// ── step 3 → 4 ───────────────────────────────────────────────────────────
+async function goStep4() {
+  showStep(4);
+  const total = folders.filter(f => f.checked).reduce((s, f) => s + (f.count || 0), 0);
+  const nFolders = selected.length;
+  document.getElementById('done-sub').textContent =
+    `Found ~${total.toLocaleString()} notes across ${nFolders} folder${nFolders !== 1 ? 's' : ''}, ready to search.`;
+}
+
+// ── finish ───────────────────────────────────────────────────────────────
+async function finish() {
+  await window.qmdSetup.finishSetup();
+}
+
+// ── back ─────────────────────────────────────────────────────────────────
+function goStep1() { showStep(1); }
+
+// ── utils ─────────────────────────────────────────────────────────────────
+function showStep(n) {
+  document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+  document.getElementById(`step-${n}`).classList.add('active');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
