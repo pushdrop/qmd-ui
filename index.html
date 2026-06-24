@@ -191,6 +191,29 @@
   .scope-option:hover { background: var(--sel-bg); }
 
   /* ── scope chip (status bar) ────────────── */
+  #sort-ctrl {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  #sort-ctrl.visible { display: flex; }
+  .sort-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 1px 6px;
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  .sort-btn:hover { color: var(--text); }
+  .sort-btn.active { color: var(--text); border-color: var(--border); }
   #scope-chip {
     display: none;
     align-items: center;
@@ -491,6 +514,10 @@
           <button id="scope-clear" onclick="clearScope()" title="Clear scope">×</button>
         </div>
         <span id="status-count"></span>
+        <div id="sort-ctrl">
+          <button class="sort-btn active" id="sort-rel" onclick="setSort('relevance')" title="Sort by relevance">relevance</button>
+          <button class="sort-btn" id="sort-date" onclick="setSort('date')" title="Sort by modified date">date</button>
+        </div>
       </div>
       <div id="results"></div>
     </div>
@@ -530,6 +557,7 @@ let currentResults = [];
 let displayedResults = [];
 let selectedIndex = -1;
 let currentScope = null;
+let sortMode = 'relevance';
 let lastBadge = 'keyword';
 let _folders = null;
 let currentQueryFetch = null;
@@ -621,6 +649,7 @@ box.addEventListener('keydown', (e) => {
     statusEl.textContent = '';
     currentResults = [];
     selectedIndex = -1;
+    document.getElementById('sort-ctrl').classList.remove('visible');
     previewContent.className = 'markdown-body placeholder';
     previewContent.textContent = 'Select a document to preview';
     previewHeader.style.display = 'none';
@@ -656,6 +685,7 @@ async function doSearch(q, tier) {
     resultsEl.innerHTML = '';
     statusEl.textContent = '';
     currentResults = [];
+    document.getElementById('sort-ctrl').classList.remove('visible');
     return;
   }
 
@@ -715,11 +745,26 @@ function cleanSnippet(s) {
   return (s || '').replace(/^@@[^\n]*\n?/, '').trim();
 }
 
+function setSort(mode) {
+  sortMode = mode;
+  document.getElementById('sort-rel').classList.toggle('active', mode === 'relevance');
+  document.getElementById('sort-date').classList.toggle('active', mode === 'date');
+  if (currentResults.length) renderResults(lastBadge);
+}
+
 function renderResults(badgeText) {
   lastBadge = badgeText;
-  displayedResults = currentScope
+  let filtered = currentScope
     ? currentResults.filter(r => r.file.startsWith(currentScope + '/') || r.file === currentScope)
-    : currentResults;
+    : [...currentResults];
+
+  if (sortMode === 'date') {
+    filtered.sort((a, b) => (b.mtime || '').localeCompare(a.mtime || ''));
+  }
+  displayedResults = filtered;
+
+  const sortCtrl = document.getElementById('sort-ctrl');
+  sortCtrl.classList.toggle('visible', currentResults.length > 0);
 
   if (displayedResults.length === 0) {
     const total = currentResults.length;
@@ -734,12 +779,14 @@ function renderResults(badgeText) {
   statusEl.textContent = displayedResults.length + scopedNote + ' results · ' + badgeText;
 
   resultsEl.innerHTML = displayedResults.map((r, i) => {
-    const score = r.score ? Math.round(r.score * 100) + '%' : '';
+    const badge = sortMode === 'date' && r.mtime
+      ? formatMtime(new Date(r.mtime))
+      : (r.score ? Math.round(r.score * 100) + '%' : '');
     return `
       <div class="result" id="res-${i}" onclick="setSelection(${i})">
         <div class="result-title">
           <span class="name">${escapeHtml(r.title || r.file.split('/').pop())}</span>
-          <span class="result-score">${score}</span>
+          <span class="result-score">${badge}</span>
         </div>
         <div class="result-path">${escapeHtml(friendlyPath(r.file))}</div>
         <div class="result-snippet">${escapeHtml(cleanSnippet(r.snippet))}</div>

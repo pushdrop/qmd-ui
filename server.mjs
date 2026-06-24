@@ -226,13 +226,13 @@ const server = http.createServer(async (req, res) => {
       const resolved = await Promise.all(results.map(async r => {
         const abs = toAbsolutePath(r.file);
         const real = await resolveRealPath(abs);
-        try { await access(real); return { ...r, file: real }; } catch { return null; }
+        try { const info = await stat(real); return { ...r, file: real, mtime: info.mtime.toISOString() }; } catch { return null; }
       }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(resolved.filter(Boolean)));
       return;
     }
-    
+
     if (req.method === 'POST' && url.pathname === '/api/query') {
       let body = '';
       for await (const chunk of req) body += chunk;
@@ -242,12 +242,12 @@ const server = http.createServer(async (req, res) => {
         res.end('[]');
         return;
       }
-      
+
       const results = await callMcpQuery(q);
       const resolved = await Promise.all(results.map(async r => {
         const abs = toAbsolutePath(r.file);
         const real = await resolveRealPath(abs);
-        try { await access(real); return { ...r, file: real }; } catch { return null; }
+        try { const info = await stat(real); return { ...r, file: real, mtime: info.mtime.toISOString() }; } catch { return null; }
       }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(resolved.filter(Boolean)));
