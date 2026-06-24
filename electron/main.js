@@ -1,7 +1,6 @@
 'use strict';
 
 const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, dialog, nativeTheme, shell } = require('electron');
-const { utilityProcess } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path    = require('path');
 const fs      = require('fs');
@@ -138,8 +137,10 @@ function startServer() {
         QMD_BIN:  bundledQmdEntry(),
         ELECTRON_RUN_AS_NODE: '1',
       })
-    : qmdEnv({ QMD_BIN: process.env.QMD_BIN || 'qmd' });
-  serverProcess = utilityProcess.fork(SERVER_PATH, [], {
+    : qmdEnv({ QMD_BIN: process.env.QMD_BIN || 'qmd', ELECTRON_RUN_AS_NODE: '1' });
+  // utilityProcess.fork() fails on some macOS versions (bad option: --type=utility).
+  // Use spawn with ELECTRON_RUN_AS_NODE=1 instead — equivalent but more compatible.
+  serverProcess = spawn(process.execPath, [SERVER_PATH], {
     env: serverEnv,
     stdio: 'pipe',
   });
