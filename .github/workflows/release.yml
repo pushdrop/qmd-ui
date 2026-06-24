@@ -19,17 +19,8 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14     # Apple Silicon runner (arm64)
-            arch: arm64
-          - os: macos-13     # Intel runner (x64)
-            arch: x64
-
-    runs-on: ${{ matrix.os }}
-    name: Build (${{ matrix.arch }})
+    runs-on: macos-14   # Apple Silicon — can cross-compile x64 too
+    name: Build (arm64 + x64)
 
     steps:
       - name: Checkout
@@ -42,15 +33,18 @@ jobs:
           cache: 'npm'
           cache-dependency-path: electron/package-lock.json
 
-      # ── Install qmd via npm and copy to resources/bin/ ───────────────────
+      # ── Install qmd (Node.js script — same file works for both arches) ──────
       - name: Install qmd
         run: npm install -g @tobilu/qmd
 
       - name: Bundle qmd binary
         run: |
           mkdir -p electron/resources/bin
-          cp "$(which qmd)" "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
-          chmod +x "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
+          QMD="$(which qmd)"
+          cp "$QMD" electron/resources/bin/qmd-darwin-arm64
+          cp "$QMD" electron/resources/bin/qmd-darwin-x64
+          chmod +x electron/resources/bin/qmd-darwin-arm64
+          chmod +x electron/resources/bin/qmd-darwin-x64
 
       # ── Install Electron dependencies ─────────────────────────────────────
       - name: Install dependencies
@@ -75,12 +69,21 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
           rm "$CERT_PATH"
 
-      # ── Build, sign, notarize, and publish to GitHub Releases ─────────────
-      - name: Build and publish
+      # ── Build arm64, then x64 — both signed, notarized, uploaded ─────────
+      - name: Build and publish (arm64)
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist:mac:${{ matrix.arch }}
+        run: npm run dist:mac:arm64
+        working-directory: electron
+
+      - name: Build and publish (x64)
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:mac:x64
         working-directory: electron
