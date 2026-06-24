@@ -44,6 +44,14 @@ extraResources:
   - from: ../index.html
     to: index.html
 
+# ── Native module rebuild ─────────────────────────────────────────────────────
+# Only rebuild better-sqlite3 for Electron's Node ABI.
+# tree-sitter-* have native bindings but we use their WASM files via web-tree-sitter.
+# node-llama-cpp is excluded from the bundle entirely (see files above).
+electronRebuild:
+  onlyModules:
+    - better-sqlite3
+
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
   category: public.app-category.productivity
