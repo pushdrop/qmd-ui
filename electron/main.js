@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, dialog, nativeTheme, shell } = require('electron');
 const { utilityProcess } = require('electron');
 const path    = require('path');
 const fs      = require('fs');
@@ -15,10 +15,12 @@ const PORT         = Number(process.env.PORT) || 8765;
 const SERVER_URL   = `http://127.0.0.1:${PORT}`;
 const CONFIG_PATH  = path.join(app.getPath('userData'), 'config.json');
 
-let mainWindow   = null;
-let wizardWindow = null;
+let mainWindow    = null;
+let wizardWindow  = null;
 let serverProcess = null;
-let quitting     = false;
+let tray          = null;
+let statusTimer   = null;
+let quitting      = false;
 
 // ── single instance ──────────────────────────────────────────────────────
 
@@ -276,6 +278,80 @@ function createWizardWindow() {
   });
 }
 
+// ── tray ─────────────────────────────────────────────────────────────────
+
+function trayIcon(status) {
+  // status: 'ok' | 'busy' | 'error'
+  const iconPath = path.join(__dirname, 'assets', 'tray-icon.png');
+  const img = nativeImage.createFromPath(iconPath);
+  img.setTemplateImage(true); // auto-adapts to dark/light menu bar
+  return img;
+}
+
+function buildTrayMenu(status) {
+  const statusLabel =
+    status === 'ok'    ? '● Running'   :
+    status === 'busy'  ? '◌ Starting…' : '○ Not running';
+
+  return Menu.buildFromTemplate([
+    { label: statusLabel, enabled: false },
+    { type: 'separator' },
+    {
+      label: 'Open qmd-ui',
+      click: () => {
+        if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+        else launchMainApp();
+      },
+    },
+    {
+      label: 'Reindex now',
+      click: () => {
+        if (mainWindow) mainWindow.webContents.executeJavaScript("runCommand('update')").catch(() => {});
+        else fetch(`${SERVER_URL}/api/update`, { method: 'POST' }).catch(() => {});
+      },
+    },
+    { type: 'separator' },
+    { label: 'Preferences…', enabled: false },   // Phase 4
+    { type: 'separator' },
+    { label: 'Quit qmd-ui', role: 'quit' },
+  ]);
+}
+
+function createTray() {
+  tray = new Tray(trayIcon('busy'));
+  tray.setToolTip('qmd-ui');
+  tray.setContextMenu(buildTrayMenu('busy'));
+
+  // Single-click on tray icon → show/focus main window
+  tray.on('click', () => {
+    if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+    else launchMainApp();
+  });
+
+  startStatusPolling();
+}
+
+async function checkServerStatus() {
+  try {
+    const r = await fetch(`${SERVER_URL}/`, { signal: AbortSignal.timeout(3000) });
+    return r.ok ? 'ok' : 'error';
+  } catch {
+    return 'error';
+  }
+}
+
+function startStatusPolling() {
+  async function poll() {
+    const status = await checkServerStatus();
+    if (tray && !tray.isDestroyed()) {
+      tray.setContextMenu(buildTrayMenu(status));
+      // Could update icon here too if we had distinct icons per state
+    }
+  }
+  poll();
+  statusTimer = setInterval(poll, 30_000);
+}
+
 // ── app menu ─────────────────────────────────────────────────────────────
 
 function buildMenu() {
@@ -365,6 +441,7 @@ ipcMain.handle('get-status', async () => {
 
 ipcMain.handle('finish-setup', async () => {
   await markSetupDone();
+  enableLoginItem();
 
   // Create main window FIRST so its existence prevents app.quit() in wizard's closed handler
   createMainWindow();
@@ -384,19 +461,18 @@ ipcMain.handle('finish-setup', async () => {
 
 app.whenReady().then(async () => {
   buildMenu();
+  createTray();
 
-  const firstRun = await isFirstRun();
-
+  const firstRun  = await isFirstRun();
   const forceSetup = process.env.FORCE_SETUP === '1';
 
   if (firstRun || forceSetup) {
     const alreadyConfigured = !forceSetup && await hasQmdCollections();
     if (alreadyConfigured) {
-      // Existing CLI user — skip wizard, mark done, go straight to app
       await markSetupDone();
+      enableLoginItem();
       launchMainApp();
     } else {
-      // Truly new user (or forced) — show setup wizard
       createWizardWindow();
     }
   } else {
@@ -412,6 +488,10 @@ app.whenReady().then(async () => {
   });
 });
 
+function enableLoginItem() {
+  app.setLoginItemSettings({ openAtLogin: true });
+}
+
 async function launchMainApp() {
   createMainWindow();
   if (await isPortFree(PORT)) startServer();
@@ -419,7 +499,11 @@ async function launchMainApp() {
   if (mainWindow) mainWindow.loadURL(ready ? SERVER_URL : loadingHTML());
 }
 
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => {
+  quitting = true;
+  if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
+  if (tray) { tray.destroy(); tray = null; }
+});
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
