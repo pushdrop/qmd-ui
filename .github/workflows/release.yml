@@ -29,13 +29,16 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: electron/package-lock.json
 
       # ── Install Electron dependencies ─────────────────────────────────────
+      # --ignore-scripts skips better-sqlite3's own node-gyp build (which uses an old
+      # gyp that needs Python distutils, removed in Python 3.12). electron-builder's
+      # @electron/rebuild runs its own newer node-gyp and compiles for Electron's ABI.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
         working-directory: electron
 
       # ── Import Developer ID certificate into an ephemeral keychain ────────
