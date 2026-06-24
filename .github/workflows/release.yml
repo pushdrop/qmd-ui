@@ -34,8 +34,9 @@ jobs:
           cache-dependency-path: electron/package-lock.json
 
       # node-gyp needs Python distutils (removed in Python 3.12); restore it
+      # --break-system-packages required on macOS runners with PEP 668 Homebrew Python
       - name: Install Python setuptools
-        run: pip3 install setuptools
+        run: pip3 install --break-system-packages setuptools
 
       # ── Install Electron dependencies ─────────────────────────────────────
       # --ignore-scripts: skip better-sqlite3's own postinstall build so it doesn't
