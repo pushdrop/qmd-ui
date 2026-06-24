@@ -64,14 +64,31 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
           rm "$CERT_PATH"
 
-      # ── Build arm64, then x64 — both signed, notarized, uploaded ─────────
-      # Rebuild better-sqlite3 for Electron's exact Node ABI per arch.
-      # npmRebuild:false in electron-builder.yml disables the auto-rebuild which
-      # would try (and fail) to recompile tree-sitter-* native bindings we don't need.
+      # ── Build a universal better-sqlite3 binary (works on arm64 + x64) ───
+      # Compile for each arch separately, then lipo-merge into a fat binary.
+      # Both DMGs ship the same universal .node so there's no per-arch packaging
+      # complexity and electron-builder can't substitute the wrong prebuilt.
       - name: Rebuild better-sqlite3 for Electron (arm64)
         run: npx @electron/rebuild -f -o better-sqlite3 --arch arm64
         working-directory: electron
 
+      - name: Save arm64 better-sqlite3 binary
+        run: cp electron/node_modules/better-sqlite3/build/Release/better_sqlite3.node /tmp/better_sqlite3_arm64.node
+
+      - name: Rebuild better-sqlite3 for Electron (x64)
+        run: npx @electron/rebuild -f -o better-sqlite3 --arch x64
+        working-directory: electron
+
+      - name: Merge into universal binary with lipo
+        run: |
+          lipo -create \
+            /tmp/better_sqlite3_arm64.node \
+            electron/node_modules/better-sqlite3/build/Release/better_sqlite3.node \
+            -output electron/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+          echo "better_sqlite3.node arch:"
+          file electron/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+
+      # ── Build both DMGs from the same universal binary ───────────────────
       - name: Build and publish (arm64)
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -79,10 +96,6 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist:mac:arm64
-        working-directory: electron
-
-      - name: Rebuild better-sqlite3 for Electron (x64)
-        run: npx @electron/rebuild -f -o better-sqlite3 --arch x64
         working-directory: electron
 
       - name: Build and publish (x64)
