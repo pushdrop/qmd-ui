@@ -50,10 +50,6 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  # Disable electron-builder's asar integrity embedding — the hash it computes doesn't
-  # match the final asar due to a build-order issue, causing Electron to reject child
-  # processes (including ELECTRON_RUN_AS_NODE spawns) at runtime.
-  asarIntegrity: false
   # Notarize after signing — requires APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD env vars
   notarize: true
   target:
