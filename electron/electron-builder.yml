@@ -1,0 +1,49 @@
+appId: com.qmd-ui.app
+productName: qmd-ui
+copyright: "qmd-ui contributors"
+
+# Files to include from the electron/ directory
+files:
+  - main.js
+
+# Files from the parent repo included alongside the app
+extraResources:
+  # The web server and UI
+  - from: ../
+    to: ../
+    filter:
+      - server.mjs
+      - index.html
+  # Bundled qmd binaries (populated by CI, not committed)
+  - from: resources/bin/
+    to: bin/
+    filter:
+      - "qmd-darwin-*"
+
+mac:
+  category: public.app-category.productivity
+  # Code signing — requires APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID in env
+  # hardenedRuntime: true     # uncomment when signing is set up
+  # entitlements: build/entitlements.mac.plist
+  # entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip      # needed for electron-updater delta updates
+      arch:
+        - arm64
+        - x64
+
+dmg:
+  background: null
+  window:
+    width: 540
+    height: 380
+
+# Auto-update via GitHub releases
+publish:
+  provider: github
+  owner: pushdrop
+  repo: qmd-ui
