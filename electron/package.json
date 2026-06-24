@@ -6,11 +6,15 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --config electron-builder.yml",
-    "dist:mac": "electron-builder --mac --config electron-builder.yml"
+    "dist:mac": "electron-builder --mac --config electron-builder.yml",
+    "dist:mac:arm64": "electron-builder --mac --arm64 --config electron-builder.yml",
+    "dist:mac:x64": "electron-builder --mac --x64 --config electron-builder.yml"
+  },
+  "dependencies": {
+    "electron-updater": "^6.0.0"
   },
   "devDependencies": {
     "electron": "^36.0.0",
-    "electron-builder": "^25.0.0",
-    "electron-updater": "^6.0.0"
+    "electron-builder": "^25.0.0"
   }
 }

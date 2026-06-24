@@ -2,39 +2,41 @@ appId: com.qmd-ui.app
 productName: qmd-ui
 copyright: "qmd-ui contributors"
 
-# Files to include from the electron/ directory
+# ── What goes inside the asar archive ────────────────────────────────────────
 files:
   - main.js
+  - preload.js
+  - setup.html
+  - prefs.html
+  - assets/**
 
-# Files from the parent repo included alongside the app
+# ── Files placed in Resources/ outside the asar ──────────────────────────────
 extraResources:
-  # The web server and UI
-  - from: ../
-    to: ../
-    filter:
-      - server.mjs
-      - index.html
-  # Bundled qmd binaries (populated by CI, not committed)
+  # Web server + UI (referenced by main.js via process.resourcesPath)
+  - from: ../server.mjs
+    to: server.mjs
+  - from: ../index.html
+    to: index.html
+  # Bundled qmd binaries — populated by CI, not committed to git
   - from: resources/bin/
     to: bin/
     filter:
       - "qmd-darwin-*"
 
+# ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
   category: public.app-category.productivity
-  # Code signing — requires APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID in env
-  # hardenedRuntime: true     # uncomment when signing is set up
-  # entitlements: build/entitlements.mac.plist
-  # entitlementsInherit: build/entitlements.mac.plist
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarize after signing — requires APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD env vars
+  notarize:
+    teamId: ${APPLE_TEAM_ID}
   target:
     - target: dmg
-      arch:
-        - arm64
-        - x64
-    - target: zip      # needed for electron-updater delta updates
-      arch:
-        - arm64
-        - x64
+      arch: [arm64, x64]
+    - target: zip    # electron-updater needs the zip for delta updates
+      arch: [arm64, x64]
 
 dmg:
   background: null
@@ -42,7 +44,7 @@ dmg:
     width: 540
     height: 380
 
-# Auto-update via GitHub releases
+# ── Auto-update via GitHub Releases ──────────────────────────────────────────
 publish:
   provider: github
   owner: pushdrop

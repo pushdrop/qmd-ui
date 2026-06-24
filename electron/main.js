@@ -2,13 +2,20 @@
 
 const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, dialog, nativeTheme, shell } = require('electron');
 const { utilityProcess } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path    = require('path');
 const fs      = require('fs');
 const fsp     = require('fs/promises');
 const os      = require('os');
 const { execFile, spawn } = require('child_process');
 
-const SERVER_PATH  = path.resolve(__dirname, '..', 'server.mjs');
+// In packaged builds, server.mjs + index.html are in Resources/ (extraResources).
+// In dev, they live in the parent directory of electron/.
+const SERVER_PATH  = app.isPackaged
+  ? path.join(process.resourcesPath, 'server.mjs')
+  : path.resolve(__dirname, '..', 'server.mjs');
+
+// preload.js is inside the asar in packaged builds; __dirname resolves correctly.
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
 const SETUP_PATH   = path.join(__dirname, 'setup.html');
 const PREFS_PATH   = path.join(__dirname, 'prefs.html');
@@ -386,6 +393,14 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Preferences…', accelerator: 'Cmd+,', click: () => createPrefsWindow() },
         { type: 'separator' },
+        {
+          label: 'Check for Updates…',
+          click: () => {
+            if (app.isPackaged) autoUpdater.checkForUpdates().catch(() => {});
+            else dialog.showMessageBox({ message: 'Auto-update only runs in the packaged app.' });
+          },
+        },
+        { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
         { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
@@ -408,6 +423,35 @@ function buildMenu() {
     ]},
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// ── auto-update ───────────────────────────────────────────────────────────
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-downloaded', info => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update ready',
+      message: `qmd-ui ${info.version} is ready to install.`,
+      detail: 'The update will be applied the next time you quit qmd-ui.',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  autoUpdater.on('error', err => {
+    console.error('[updater]', err.message);
+  });
+
+  // Delay first check so startup isn't blocked
+  setTimeout(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+  }, 10_000);
 }
 
 // ── IPC handlers (used by wizard) ─────────────────────────────────────────
@@ -485,6 +529,7 @@ ipcMain.handle('finish-setup', async () => {
 app.whenReady().then(async () => {
   buildMenu();
   createTray();
+  if (app.isPackaged) setupAutoUpdater();
 
   const firstRun  = await isFirstRun();
   const forceSetup = process.env.FORCE_SETUP === '1';
