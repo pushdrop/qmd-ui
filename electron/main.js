@@ -43,49 +43,73 @@ if (!gotLock) {
   });
 }
 
-// ── qmd binary ───────────────────────────────────────────────────────────
+// ── qmd invocation ───────────────────────────────────────────────────────────
+//
+// When packaged, qmd is bundled in node_modules/@tobilu/qmd (asarUnpack).
+// We run it via Electron's own Node runtime (process.execPath + ELECTRON_RUN_AS_NODE=1)
+// so users don't need node/bun installed on their machine.
+//
+// When developing (not packaged), fall back to the system `qmd` binary.
 
-function qmdBin() {
-  return process.env.QMD_BIN || 'qmd';
+function bundledQmdEntry() {
+  // The asarUnpack path on disk — child processes can't read inside .asar
+  return path.join(
+    process.resourcesPath,
+    'app.asar.unpacked', 'node_modules', '@tobilu', 'qmd', 'dist', 'cli', 'qmd.js'
+  );
+}
+
+function qmdCmd(args) {
+  if (app.isPackaged) {
+    return {
+      bin: process.execPath,
+      cmdArgs: [bundledQmdEntry(), ...args],
+      extraEnv: { ELECTRON_RUN_AS_NODE: '1' },
+    };
+  }
+  return {
+    bin: process.env.QMD_BIN || 'qmd',
+    cmdArgs: args,
+    extraEnv: {},
+  };
 }
 
 function extraNodePaths() {
   const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
-  // nvm: read default alias to find active version bin dir
   try {
     const nvmDir = process.env.NVM_DIR || path.join(os.homedir(), '.nvm');
     const def = fs.readFileSync(path.join(nvmDir, 'alias', 'default'), 'utf8').trim();
     const candidate = path.join(nvmDir, 'versions', 'node', def, 'bin');
     if (fs.existsSync(candidate)) extra.unshift(candidate);
   } catch {}
-  // volta
   const voltaBin = path.join(os.homedir(), '.volta', 'bin');
   if (fs.existsSync(voltaBin)) extra.unshift(voltaBin);
   return extra;
 }
 
-function qmdEnv() {
+function qmdEnv(extraEnv = {}) {
   return {
     ...process.env,
-    QMD_BIN: qmdBin(),
     PATH: [process.env.PATH || '', ...extraNodePaths()].join(':'),
+    ...extraEnv,
   };
 }
 
 async function checkQmdAvailable() {
+  if (app.isPackaged) {
+    return fs.existsSync(bundledQmdEntry());
+  }
   return new Promise(resolve => {
-    execFile(qmdBin(), ['status'], { env: qmdEnv(), timeout: 8000 },
-      (err) => {
-        // ENOENT = binary not found, 127 = shell "command not found"
-        if (err && (err.code === 'ENOENT' || err.code === 127)) resolve(false);
-        else resolve(true);
-      });
+    execFile(process.env.QMD_BIN || 'qmd', ['status'],
+      { env: qmdEnv(), timeout: 8000 },
+      (err) => resolve(!err || (err.code !== 'ENOENT' && err.code !== 127)));
   });
 }
 
 function runQmd(args) {
+  const { bin, cmdArgs, extraEnv } = qmdCmd(args);
   return new Promise((resolve, reject) => {
-    execFile(qmdBin(), args, { env: qmdEnv(), maxBuffer: 10 * 1024 * 1024 },
+    execFile(bin, cmdArgs, { env: qmdEnv(extraEnv), maxBuffer: 10 * 1024 * 1024 },
       (err, stdout, stderr) => {
         if (err) { err.stderr = stderr; reject(err); }
         else resolve(stdout);
@@ -105,8 +129,18 @@ async function isPortFree(port) {
 }
 
 function startServer() {
+  // Pass QMD_BIN + QMD_NODE so server.mjs knows how to invoke qmd.
+  // Packaged: QMD_NODE=process.execPath, QMD_BIN=path to dist/cli/qmd.js
+  // Dev:      QMD_BIN=system `qmd` (QMD_NODE unset)
+  const serverEnv = app.isPackaged
+    ? qmdEnv({
+        QMD_NODE: process.execPath,
+        QMD_BIN:  bundledQmdEntry(),
+        ELECTRON_RUN_AS_NODE: '1',
+      })
+    : qmdEnv({ QMD_BIN: process.env.QMD_BIN || 'qmd' });
   serverProcess = utilityProcess.fork(SERVER_PATH, [], {
-    env: qmdEnv(),
+    env: serverEnv,
     stdio: 'pipe',
   });
   serverProcess.stdout?.on('data', c => process.stdout.write('[server] ' + c));
@@ -499,7 +533,8 @@ ipcMain.handle('open-folder-dialog', async (event) => {
 
 ipcMain.handle('run-update', async () => {
   return new Promise((resolve, reject) => {
-    const proc = spawn(qmdBin(), ['update'], { env: qmdEnv() });
+    const { bin, cmdArgs, extraEnv } = qmdCmd(['update']);
+    const proc = spawn(bin, cmdArgs, { env: qmdEnv(extraEnv) });
     proc.stdout.on('data', chunk => {
       const line = chunk.toString().trim();
       if (line && wizardWindow) wizardWindow.webContents.send('update-progress', line);
@@ -517,8 +552,8 @@ ipcMain.handle('run-update', async () => {
 });
 
 ipcMain.handle('run-embed', async () => {
-  // Fire-and-forget — don't block the wizard
-  const proc = spawn(qmdBin(), ['embed'], { env: qmdEnv(), stdio: 'ignore' });
+  const { bin, cmdArgs, extraEnv } = qmdCmd(['embed']);
+  const proc = spawn(bin, cmdArgs, { env: qmdEnv(extraEnv), stdio: 'ignore' });
   proc.unref();
   return 'started';
 });

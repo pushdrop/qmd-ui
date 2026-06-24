@@ -1,6 +1,6 @@
 {
   "name": "qmd-ui",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Local markdown search engine",
   "main": "main.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "dist:mac:x64": "electron-builder --mac --x64 --config electron-builder.yml"
   },
   "dependencies": {
+    "@tobilu/qmd": "^2.5.3",
     "electron-updater": "^6.0.0"
   },
   "devDependencies": {

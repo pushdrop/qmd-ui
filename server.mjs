@@ -8,6 +8,9 @@ import { homedir } from 'node:os';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const QMD        = process.env.QMD_BIN        || 'qmd';
+// When packaged, QMD_NODE = Electron binary path. ELECTRON_RUN_AS_NODE=1 (already in env)
+// makes it act as plain Node.js, so we can run qmd's JS entry without system node.
+const QMD_NODE   = process.env.QMD_NODE       || null;
 const PORT       = Number(process.env.PORT)    || 8765;
 const DAEMON_URL = process.env.QMD_DAEMON_URL  || 'http://localhost:8181';
 const HOME       = homedir();
@@ -78,9 +81,9 @@ let folderCache = [];
 
 async function exec(cmd, args) {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { 
+    execFile(cmd, args, {
       maxBuffer: 10 * 1024 * 1024,
-      env: { ...process.env, PATH: `${process.env.PATH || ''}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin` }
+      env: process.env,
     }, (error, stdout, stderr) => {
       if (error) {
         error.stderr = stderr;
@@ -90,16 +93,24 @@ async function exec(cmd, args) {
   });
 }
 
+// Run qmd — routes through Electron's bundled Node when packaged (QMD_NODE set)
+function execQmd(args) {
+  return QMD_NODE ? exec(QMD_NODE, [QMD, ...args]) : exec(QMD, args);
+}
+
 async function ensureDaemon() {
   try {
     const res = await fetch(`${DAEMON_URL}/health`);
     if (!res.ok) throw new Error('Not ok');
   } catch (err) {
     console.log('Spawning qmd daemon...');
-    const daemon = spawn(QMD, ['mcp', '--http', '--daemon'], {
+    const [daemonBin, daemonArgs] = QMD_NODE
+      ? [QMD_NODE, [QMD, 'mcp', '--http', '--daemon']]
+      : [QMD, ['mcp', '--http', '--daemon']];
+    const daemon = spawn(daemonBin, daemonArgs, {
       detached: true,
       stdio: 'ignore',
-      env: { ...process.env, PATH: `${process.env.PATH || ''}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin` }
+      env: process.env,
     });
     daemon.unref();
     
@@ -144,7 +155,7 @@ async function cacheFolders() {
 
 async function cacheRoots() {
   try {
-    const out = await exec(QMD, ['collection', 'list']);
+    const out = await execQmd(['collection', 'list']);
     const names = [];
     for (const line of out.split('\n')) {
       const match = line.match(/^([a-zA-Z0-9_-]+)\s+\(qmd:\/\//);
@@ -152,7 +163,7 @@ async function cacheRoots() {
     }
     
     for (const name of names) {
-      const showOut = await exec(QMD, ['collection', 'show', name]);
+      const showOut = await execQmd(['collection', 'show', name]);
       const match = showOut.match(/Path:\s+(.*)/);
       if (match) {
         collectionRoots.set(name, match[1].trim());
@@ -290,7 +301,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       
-      const out = await exec(QMD, ['search', '--json', '-n', '20', q]);
+      const out = await execQmd(['search', '--json', '-n', '20', q]);
       const results = JSON.parse(out);
       const resolved = await Promise.all(results.map(async r => {
         const abs = toAbsolutePath(r.file);
@@ -328,7 +339,7 @@ const server = http.createServer(async (req, res) => {
       if (!file) {
         res.writeHead(400); res.end('Missing file param'); return;
       }
-      let out = await exec(QMD, ['get', file, '--no-line-numbers']);
+      let out = await execQmd(['get', file, '--no-line-numbers']);
       // qmd get prepends a header line (qmd:// or filesystem path) + a "---" rule; strip both
       const lines = out.split('\n');
       if (lines[0]?.startsWith('qmd://') || lines[0]?.startsWith('/')) {
@@ -406,7 +417,7 @@ const server = http.createServer(async (req, res) => {
 
       const real = await resolveRealPath(resolved);
       await writeFile(real, content, 'utf8');
-      await exec(QMD, ['update']);
+      await execQmd(['update']);
       res.writeHead(200); res.end('OK');
       return;
     }
@@ -422,17 +433,17 @@ const server = http.createServer(async (req, res) => {
       let body = '';
       for await (const chunk of req) body += chunk;
       const { name, dir } = JSON.parse(body);
-      await exec(QMD, ['collection', 'add', name, dir]);
+      await execQmd(['collection', 'add', name, dir]);
       await cacheRoots();
       await cacheFolders();
-      exec(QMD, ['update']).then(() => exec(QMD, ['embed'])).catch(console.error);
+      execQmd(['update']).then(() => execQmd(['embed'])).catch(console.error);
       res.writeHead(200); res.end('OK');
       return;
     }
 
     if (req.method === 'DELETE' && url.pathname.startsWith('/api/collections/')) {
       const name = decodeURIComponent(url.pathname.slice('/api/collections/'.length));
-      await exec(QMD, ['collection', 'remove', name]);
+      await execQmd(['collection', 'remove', name]);
       collectionRoots.delete(name);
       await cacheFolders();
       res.writeHead(200); res.end('OK');
@@ -498,7 +509,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/update') {
-      const out = await exec(QMD, ['update']);
+      const out = await execQmd(['update']);
       cacheFolders(); // refresh folder cache after reindex (new dirs may have appeared)
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end(out);
@@ -506,7 +517,7 @@ const server = http.createServer(async (req, res) => {
     }
     
     if (req.method === 'GET' && url.pathname === '/api/status') {
-      const out = await exec(QMD, ['status']);
+      const out = await execQmd(['status']);
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end(out);
       return;

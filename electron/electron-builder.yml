@@ -9,6 +9,32 @@ files:
   - setup.html
   - prefs.html
   - assets/**
+  # Strip packages that are large and not needed for basic search/indexing:
+  # node-llama-cpp — only used by `qmd embed` with a local LLM model (optional feature)
+  - "!**/node_modules/node-llama-cpp/**"
+  - "!**/node_modules/@node-llama-cpp/**"
+  # typescript — compiler, never needed at runtime
+  - "!**/node_modules/typescript/**"
+  # better-sqlite3 build sources — keep only the compiled .node binary
+  - "!**/node_modules/better-sqlite3/deps/**"
+  - "!**/node_modules/better-sqlite3/src/**"
+  - "!**/node_modules/better-sqlite3/binding.gyp"
+
+# ── Outside asar so the qmd child process (ELECTRON_RUN_AS_NODE) can open them
+asarUnpack:
+  # qmd JS source — child process can't read from inside .asar
+  - "node_modules/@tobilu/**"
+  # Native .node addon — must be on real FS
+  - "**/node_modules/better-sqlite3/build/**"
+  # sqlite-vec platform dylibs — loaded via db.loadExtension()
+  - "**/node_modules/sqlite-vec-darwin-arm64/**"
+  - "**/node_modules/sqlite-vec-darwin-x64/**"
+  # tree-sitter WASM grammars — read from disk at runtime
+  - "**/node_modules/web-tree-sitter/**"
+  - "**/node_modules/tree-sitter-typescript/**"
+  - "**/node_modules/tree-sitter-python/**"
+  - "**/node_modules/tree-sitter-go/**"
+  - "**/node_modules/tree-sitter-rust/**"
 
 # ── Files placed in Resources/ outside the asar ──────────────────────────────
 extraResources:
