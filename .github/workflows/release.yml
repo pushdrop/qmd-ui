@@ -49,7 +49,7 @@ jobs:
       - name: Bundle qmd binary
         run: |
           mkdir -p electron/resources/bin
-          cp "$(npm root -g)/../bin/qmd" "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
+          cp "$(which qmd)" "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
           chmod +x "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
 
       # ── Install Electron dependencies ─────────────────────────────────────
