@@ -44,6 +44,11 @@ npmRebuild: false
 # ── Post-pack hook to fix native module arch if electron-builder replaced it ──
 afterPack: ./afterPack.js
 
+# ── Post-sign hook: strip com.apple.cs.* xattrs before DMG creation ──────────
+# codesign writes per-file xattrs that get embedded in the DMG's HFS+ filesystem.
+# On macOS 26, these xattrs cause _dyld_start hangs when installed to /Applications.
+afterSign: ./afterSign.js
+
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
   category: public.app-category.productivity
