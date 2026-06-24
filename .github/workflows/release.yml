@@ -42,16 +42,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: electron/package-lock.json
 
-      # ── Install qmd via Homebrew and copy to resources/bin/ ──────────────
+      # ── Install qmd via npm and copy to resources/bin/ ───────────────────
       - name: Install qmd
-        run: |
-          brew tap tobi/tap
-          brew install qmd
+        run: npm install -g @tobilu/qmd
 
       - name: Bundle qmd binary
         run: |
           mkdir -p electron/resources/bin
-          cp "$(brew --prefix)/bin/qmd" "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
+          cp "$(npm root -g)/../bin/qmd" "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
           chmod +x "electron/resources/bin/qmd-darwin-${{ matrix.arch }}"
 
       # ── Install Electron dependencies ─────────────────────────────────────
