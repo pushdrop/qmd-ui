@@ -603,7 +603,7 @@ if (app.isPackaged && process.execPath.includes('AppTranslocation')) {
   if (!qmdFound) {
     const { response } = await dialog.showMessageBox({
       type: 'error',
-      title: 'qmd not found',
+      title: 'QMD not found',
       message: 'qmd must be installed to use QMD UI.',
       detail: 'Install it with Node.js:\n\n    npm install -g @tobilu/qmd\n\nOr with Bun:\n\n    bun add -g @tobilu/qmd\n\nThen restart QMD UI.',
       buttons: ['Quit', 'Open qmd on npm'],
