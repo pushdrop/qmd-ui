@@ -91,6 +91,20 @@
   }
   body.landing #hints { display: none; }
   body.landing #searchBox { font-size: 20px; }
+  #no-folders {
+    display: none;
+    position: absolute;
+    top: calc(50% + 60px);
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: var(--dim);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  body.landing #no-folders.visible { display: block; }
+  #no-folders a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  #no-folders a:hover { text-decoration: underline; }
   #toast {
     position: fixed;
     bottom: 24px;
@@ -516,6 +530,7 @@
     <pre id="status-modal-body">Loading…</pre>
   </dialog>
   <div id="toast"></div>
+  <div id="no-folders">No folders indexed yet.<br><a onclick="openPrefs()">Open Settings</a> to add a folder.</div>
   <div id="header">
     <input type="text" id="searchBox" placeholder="Search MDs…" autocomplete="off" spellcheck="false">
     <span id="spinner">deep search…</span>
@@ -660,11 +675,18 @@ if (initialQ) {
   doSearch(initialQ, 'instant');
 } else {
   document.body.classList.add('landing');
+  // Check if any folders are indexed; if not, show the no-folders prompt
+  fetch('/api/collections').then(r => r.json()).then(cols => {
+    if (!cols || cols.length === 0) {
+      document.getElementById('no-folders').classList.add('visible');
+    }
+  }).catch(() => {});
 }
 
 function exitLanding() {
   if (document.body.classList.contains('landing')) {
     document.body.classList.remove('landing');
+    document.getElementById('no-folders').classList.remove('visible');
   }
 }
 
