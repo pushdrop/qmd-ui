@@ -103,21 +103,15 @@ jobs:
           echo "better_sqlite3.node arch:"
           file electron/node_modules/better-sqlite3/build/Release/better_sqlite3.node
 
-      # ── Build both DMGs from the same universal binary ───────────────────
-      - name: Build and publish (arm64)
+      # ── Build both DMGs in one invocation to avoid duplicate asset uploads ──
+      # Two separate steps each upload shared files (e.g. latest-mac.yml,
+      # mac.zip.blockmap) causing GitHub to return 422 on the second upload.
+      # Building arm64 + x64 together means each asset is uploaded exactly once.
+      - name: Build and publish (arm64 + x64)
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist:mac:arm64
-        working-directory: electron
-
-      - name: Build and publish (x64)
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run dist:mac:x64
+        run: npm run dist:mac
         working-directory: electron
