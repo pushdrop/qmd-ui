@@ -474,9 +474,47 @@
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
   ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ── status modal ───────────────────────── */
+  #status-modal {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    padding: 0;
+    max-width: min(480px, 90vw);
+    max-height: 60vh;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,.25);
+    min-width: 300px;
+  }
+  #status-modal[open] { display: flex; flex-direction: column; }
+  #status-modal::backdrop { background: rgba(0,0,0,.4); }
+  #status-modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-weight: 600; font-size: 12px; flex-shrink: 0;
+  }
+  #status-modal-close {
+    background: none; border: none; cursor: pointer; color: var(--dim);
+    font-size: 18px; line-height: 1; padding: 0 2px; font-family: inherit;
+  }
+  #status-modal-close:hover { color: var(--text); }
+  #status-modal-body {
+    padding: 14px; overflow-y: auto; font-family: var(--mono);
+    font-size: 11px; line-height: 1.7; white-space: pre-wrap;
+    color: var(--text); margin: 0; flex: 1;
+  }
 </style>
 </head>
 <body>
+  <dialog id="status-modal">
+    <div id="status-modal-head">
+      Index Status
+      <button id="status-modal-close" onclick="document.getElementById('status-modal').close()">×</button>
+    </div>
+    <pre id="status-modal-body">Loading…</pre>
+  </dialog>
   <div id="toast"></div>
   <div id="header">
     <input type="text" id="searchBox" placeholder="Search…" autocomplete="off" spellcheck="false">
@@ -498,7 +536,7 @@
     <button class="icon-btn" onclick="runCommand('update')" title="Reindex">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
     </button>
-    <button class="icon-btn" onclick="runCommand('status')" title="Index Info">
+    <button class="icon-btn" onclick="showStatusModal()" title="Index Info">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
     </button>
     <button id="sidebarToggleBtn" class="icon-btn" onclick="toggleSidebar()" title="Toggle results panel">
@@ -590,14 +628,26 @@ function hideToast() {
 }
 
 async function runCommand(cmd) {
-  const label = cmd === 'update' ? 'Reindexing…' : 'Loading status…';
-  showToast(label, true);
+  showToast('Reindexing…', true);
   try {
-    const res = await fetch('/api/' + cmd, { method: cmd === 'update' ? 'POST' : 'GET' });
-    const text = await res.text();
-    showToast(cmd === 'update' ? 'Reindex complete ✓' : text.trim());
+    const res = await fetch('/api/update', { method: 'POST' });
+    showToast('Reindex complete ✓');
+    _folders = null; // invalidate folder cache
   } catch(e) {
     showToast('Error: ' + e.message);
+  }
+}
+
+async function showStatusModal() {
+  const modal = document.getElementById('status-modal');
+  const body  = document.getElementById('status-modal-body');
+  body.textContent = 'Loading…';
+  modal.showModal();
+  try {
+    const res = await fetch('/api/status');
+    body.textContent = (await res.text()).trim() || '(no output)';
+  } catch(e) {
+    body.textContent = 'Error: ' + e.message;
   }
 }
 
@@ -631,10 +681,15 @@ function updateUrl(q) {
 box.addEventListener('input', () => {
   exitLanding();
   clearTimeout(debounceTimer);
+  const q = box.value;
+  if (q.trim()) {
+    spinnerEl.textContent = 'searching…';
+    spinnerEl.style.display = 'inline';
+  }
   debounceTimer = setTimeout(() => {
-    updateUrl(box.value);
-    doSearch(box.value, 'instant');
-  }, 150);
+    updateUrl(q);
+    doSearch(q, 'instant');
+  }, 250);
 });
 
 box.addEventListener('keydown', (e) => {
@@ -643,6 +698,10 @@ box.addEventListener('keydown', (e) => {
     updateUrl(box.value);
     doSearch(box.value, 'deep');
   } else if (e.key === 'Escape' && !isEditing) {
+    if (currentQueryFetch) { currentQueryFetch.abort(); currentQueryFetch = null; }
+    clearTimeout(debounceTimer);
+    spinnerEl.style.display = 'none';
+    spinnerEl.textContent = 'deep search…';
     box.value = '';
     updateUrl('');
     resultsEl.innerHTML = '';
@@ -682,15 +741,21 @@ document.addEventListener('keydown', (e) => {
 
 async function doSearch(q, tier) {
   if (!q.trim()) {
-    resultsEl.innerHTML = '';
-    statusEl.textContent = '';
-    currentResults = [];
-    document.getElementById('sort-ctrl').classList.remove('visible');
+    spinnerEl.style.display = 'none';
+    if (!document.body.classList.contains('landing')) {
+      loadAllFiles();
+    } else {
+      resultsEl.innerHTML = '';
+      statusEl.textContent = '';
+      currentResults = [];
+      document.getElementById('sort-ctrl').classList.remove('visible');
+    }
     return;
   }
 
   if (tier === 'deep') {
-    spinnerEl.style.display = 'block';
+    spinnerEl.textContent = 'deep search…';
+    spinnerEl.style.display = 'inline';
     const timer = setTimeout(() => {
       spinnerEl.textContent = 'warming models (~10s)…';
     }, 2000);
@@ -718,11 +783,14 @@ async function doSearch(q, tier) {
     } catch (e) {
       clearTimeout(timer);
       spinnerEl.style.display = 'none';
+      spinnerEl.textContent = 'deep search…';
       if (e.name !== 'AbortError') showError(e.message);
     }
   } else {
     try {
       const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+      spinnerEl.style.display = 'none';
+      spinnerEl.textContent = 'deep search…';
       if (!res.ok) {
         showError(await res.text());
         return;
@@ -730,8 +798,27 @@ async function doSearch(q, tier) {
       currentResults = await res.json();
       renderResults('keyword');
     } catch(e) {
+      spinnerEl.style.display = 'none';
+      spinnerEl.textContent = 'deep search…';
       showError(e.message);
     }
+  }
+}
+
+async function loadAllFiles() {
+  spinnerEl.textContent = 'loading…';
+  spinnerEl.style.display = 'inline';
+  try {
+    const res = await fetch('/api/files');
+    spinnerEl.style.display = 'none';
+    spinnerEl.textContent = 'deep search…';
+    if (!res.ok) { showError(await res.text()); return; }
+    currentResults = await res.json();
+    renderResults('all');
+  } catch(e) {
+    spinnerEl.style.display = 'none';
+    spinnerEl.textContent = 'deep search…';
+    showError(e.message);
   }
 }
 

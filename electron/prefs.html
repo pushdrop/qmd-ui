@@ -298,16 +298,23 @@
 
     async function addFolder() {
       if (busy) return;
-      const picked = await window.qmdSetup.openFolderDialog();
-      if (!picked) return;
-      setBusy(true); setStatus('Adding and indexing… this may take a moment');
+      setBusy(true); setStatus('Opening folder picker…');
+      let picked;
+      try {
+        picked = await window.qmdSetup.openFolderDialog();
+      } catch(e) {
+        setStatus('Error: ' + e.message, 'err');
+        setBusy(false); return;
+      }
+      if (!picked) { setStatus(''); setBusy(false); return; }
+      setStatus('Adding and indexing… this may take a moment');
       try {
         const r = await fetch(`${API}/api/collections`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: picked.name, dir: picked.dir }),
         });
         if (!r.ok) throw new Error(await r.text());
-        setStatus(`Added "${picked.name}" — indexing in background`, 'ok');
+        setStatus(`Added — indexing in background`, 'ok');
         await loadCollections();
       } catch (e) {
         setStatus('Error: ' + e.message, 'err');

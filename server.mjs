@@ -519,6 +519,32 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     
+    if (req.method === 'GET' && url.pathname === '/api/files') {
+      const files = [];
+      async function walkMd(dir, depth) {
+        if (depth > 8) return;
+        let entries;
+        try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          if (e.name.startsWith('.')) continue;
+          const full = join(dir, e.name);
+          if (e.isSymbolicLink()) continue;
+          if (e.isDirectory()) { await walkMd(full, depth + 1); }
+          else if (e.isFile() && e.name.endsWith('.md')) {
+            try {
+              const s = await stat(full);
+              files.push({ file: full, title: e.name.replace(/\.md$/, ''), mtime: s.mtime.toISOString(), score: null, snippet: '' });
+            } catch { }
+          }
+        }
+      }
+      for (const root of collectionRoots.values()) await walkMd(root, 0);
+      files.sort((a, b) => b.mtime.localeCompare(a.mtime));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(files.slice(0, 500)));
+      return;
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/status') {
       const out = await execQmd(['status'], { timeout: 8000 });
       res.writeHead(200, { 'Content-Type': 'text/plain' });
