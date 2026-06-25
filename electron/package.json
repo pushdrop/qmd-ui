@@ -1,6 +1,6 @@
 {
   "name": "qmd-ui",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Local markdown search engine",
   "main": "main.js",
   "scripts": {

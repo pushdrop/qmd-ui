@@ -516,9 +516,8 @@ ipcMain.handle('scan-folders', async () => {
   return scanForNoteFolders();
 });
 
-ipcMain.handle('add-collection', async (_, { name, dir }) => {
-  // qmd collection add <name> <path>
-  return runQmd(['collection', 'add', name, dir]);
+ipcMain.handle('add-collection', async (_, { dir }) => {
+  return runQmd(['collection', 'add', dir]);
 });
 
 ipcMain.handle('open-folder-dialog', async (event) => {

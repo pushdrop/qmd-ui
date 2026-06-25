@@ -64,6 +64,21 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
           rm "$CERT_PATH"
 
+      # ── Ensure sqlite-vec x64 dylib is present for x64 packaging ───────────
+      # The CI runner is arm64, so npm ci only installs sqlite-vec-darwin-arm64.
+      # The x64 DMG (and any arm64 user running the x64 build under Rosetta) needs
+      # sqlite-vec-darwin-x64. npm pack bypasses cpu/os restrictions, so we use it
+      # to download and manually unpack the x64 variant alongside the arm64 one.
+      - name: Install sqlite-vec-darwin-x64 (cross-arch, for x64 DMG)
+        run: |
+          VEC_VER=$(node -pe "require('./node_modules/sqlite-vec/package.json').optionalDependencies['sqlite-vec-darwin-x64']")
+          npm pack "sqlite-vec-darwin-x64@${VEC_VER}" --pack-destination /tmp
+          mkdir -p node_modules/sqlite-vec-darwin-x64
+          tar -xzf "/tmp/sqlite-vec-darwin-x64-${VEC_VER}.tgz" -C node_modules/sqlite-vec-darwin-x64 --strip-components=1
+          echo "Installed sqlite-vec-darwin-x64@${VEC_VER}"
+          file node_modules/sqlite-vec-darwin-x64/vec0.dylib
+        working-directory: electron
+
       # ── Build a universal better-sqlite3 binary (works on arm64 + x64) ───
       # Compile for each arch separately, then lipo-merge into a fat binary.
       # Both DMGs ship the same universal .node so there's no per-arch packaging

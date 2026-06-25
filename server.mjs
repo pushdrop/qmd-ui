@@ -79,13 +79,16 @@ let mcpSessionId = null;
 let collectionRoots = new Map();
 let folderCache = [];
 
-async function exec(cmd, args) {
+async function exec(cmd, args, { timeout } = {}) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, {
       maxBuffer: 10 * 1024 * 1024,
       env: process.env,
+      ...(timeout != null && { timeout }),
     }, (error, stdout, stderr) => {
       if (error) {
+        // ETIMEDOUT / SIGTERM from timeout: return whatever stdout we got so far
+        if ((error.killed || error.code === 'ETIMEDOUT') && stdout) return resolve(stdout);
         error.stderr = stderr;
         reject(error);
       } else resolve(stdout);
@@ -94,8 +97,8 @@ async function exec(cmd, args) {
 }
 
 // Run qmd — routes through Electron's bundled Node when packaged (QMD_NODE set)
-function execQmd(args) {
-  return QMD_NODE ? exec(QMD_NODE, [QMD, ...args]) : exec(QMD, args);
+function execQmd(args, opts) {
+  return QMD_NODE ? exec(QMD_NODE, [QMD, ...args], opts) : exec(QMD, args, opts);
 }
 
 async function ensureDaemon() {
@@ -517,7 +520,7 @@ const server = http.createServer(async (req, res) => {
     }
     
     if (req.method === 'GET' && url.pathname === '/api/status') {
-      const out = await execQmd(['status']);
+      const out = await execQmd(['status'], { timeout: 8000 });
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end(out);
       return;
