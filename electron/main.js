@@ -305,7 +305,7 @@ function loadingHTML() {
   return `data:text/html,<!doctype html><html><head><meta charset="utf-8"><style>
     body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
     background:${bg};color:${fg};font:14px system-ui,-apple-system;}</style></head>
-    <body>Starting qmd-ui…</body></html>`;
+    <body>Starting QMD UI…</body></html>`;
 }
 
 function createMainWindow() {
@@ -382,7 +382,7 @@ function buildTrayMenu(status) {
     { label: statusLabel, enabled: false },
     { type: 'separator' },
     {
-      label: 'Open qmd-ui',
+      label: 'Open QMD UI',
       click: () => {
         if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
         else launchMainApp();
@@ -398,13 +398,13 @@ function buildTrayMenu(status) {
     { type: 'separator' },
     { label: 'Preferences…', click: () => createPrefsWindow() },
     { type: 'separator' },
-    { label: 'Quit qmd-ui', role: 'quit' },
+    { label: 'Quit QMD UI', role: 'quit' },
   ]);
 }
 
 function createTray() {
   tray = new Tray(trayIcon('busy'));
-  tray.setToolTip('qmd-ui');
+  tray.setToolTip('QMD UI');
   tray.setContextMenu(buildTrayMenu('busy'));
 
   // Single-click on tray icon → show/focus main window
@@ -491,8 +491,8 @@ function setupAutoUpdater() {
     dialog.showMessageBox({
       type: 'info',
       title: 'Update ready',
-      message: `qmd-ui ${info.version} is ready to install.`,
-      detail: 'The update will be applied the next time you quit qmd-ui.',
+      message: `QMD UI ${info.version} is ready to install.`,
+      detail: 'The update will be applied the next time you quit QMD UI.',
       buttons: ['Restart now', 'Later'],
       defaultId: 0,
     }).then(({ response }) => {
@@ -593,8 +593,8 @@ app.whenReady().then(async () => {
     const { response } = await dialog.showMessageBox({
       type: 'error',
       title: 'qmd not found',
-      message: 'qmd must be installed to use qmd-ui.',
-      detail: 'Install it with Node.js:\n\n    npm install -g @tobilu/qmd\n\nOr with Bun:\n\n    bun add -g @tobilu/qmd\n\nThen restart qmd-ui.',
+      message: 'qmd must be installed to use QMD UI.',
+      detail: 'Install it with Node.js:\n\n    npm install -g @tobilu/qmd\n\nOr with Bun:\n\n    bun add -g @tobilu/qmd\n\nThen restart QMD UI.',
       buttons: ['Quit', 'Open qmd on npm'],
       defaultId: 0,
       cancelId: 0,

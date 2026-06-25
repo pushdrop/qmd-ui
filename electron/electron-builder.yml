@@ -1,5 +1,5 @@
 appId: com.qmd-ui.app
-productName: qmd-ui
+productName: QMD UI
 copyright: "qmd-ui contributors"
 
 # ── What goes inside the asar archive ────────────────────────────────────────
@@ -51,6 +51,7 @@ afterSign: ./afterSign.js
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
+  icon: build/qmd.icns
   category: public.app-category.productivity
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
