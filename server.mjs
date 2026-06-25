@@ -432,8 +432,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/collections') {
       let body = '';
       for await (const chunk of req) body += chunk;
-      const { name, dir } = JSON.parse(body);
-      await execQmd(['collection', 'add', name, dir]);
+      const { dir } = JSON.parse(body);
+      await execQmd(['collection', 'add', dir]);
       await cacheRoots();
       await cacheFolders();
       execQmd(['update']).then(() => execQmd(['embed'])).catch(console.error);
