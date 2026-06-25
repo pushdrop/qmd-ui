@@ -582,7 +582,18 @@ ipcMain.handle('finish-setup', async () => {
 
 // ── main ──────────────────────────────────────────────────────────────────
 
-app.whenReady().then(async () => {
+if (app.isPackaged && process.execPath.includes('AppTranslocation')) {
+  app.whenReady().then(() => {
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      title: 'Move QMD UI to Applications',
+      message: 'QMD UI needs to be in your Applications folder.',
+      detail: 'Please drag QMD UI.app from the DMG into your Applications folder, then open it from there.',
+      buttons: ['OK'],
+    });
+    app.quit();
+  });
+} else app.whenReady().then(async () => {
   buildMenu();
   createTray();
   if (app.isPackaged) setupAutoUpdater();
@@ -627,7 +638,7 @@ app.whenReady().then(async () => {
       });
     }
   });
-});
+}); // end app.whenReady (main path)
 
 function enableLoginItem() {
   app.setLoginItemSettings({ openAtLogin: true });
