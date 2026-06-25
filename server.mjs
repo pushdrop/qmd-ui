@@ -161,8 +161,8 @@ async function cacheRoots() {
     const out = await execQmd(['collection', 'list']);
     const names = [];
     for (const line of out.split('\n')) {
-      const match = line.match(/^([a-zA-Z0-9_-]+)\s+\(qmd:\/\//);
-      if (match) names.push(match[1]);
+      const match = line.match(/^(.+?)\s+\(qmd:\/\//);
+      if (match) names.push(match[1].trim());
     }
     
     for (const name of names) {
