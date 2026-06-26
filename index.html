@@ -939,10 +939,11 @@ async function loadPreview() {
     const mtime = res.headers.get('X-File-Mtime');
 
     previewContent.className = 'markdown-body';
+    const renderText = text.replace(/^---\r?\n[\s\S]*?\n---\r?\n?/, '');
     if (window.marked) {
-      previewContent.innerHTML = marked.parse(text);
+      previewContent.innerHTML = marked.parse(renderText);
     } else {
-      previewContent.innerHTML = '<pre>' + escapeHtml(text) + '</pre>';
+      previewContent.innerHTML = '<pre>' + escapeHtml(renderText) + '</pre>';
     }
     previewPath.textContent = friendlyPath(r.file);
     document.getElementById('preview-mtime').textContent = mtime ? formatMtime(new Date(mtime)) : '';
